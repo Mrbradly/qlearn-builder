@@ -1,0 +1,23 @@
+{
+  "name": "qlearn-builder",
+  "version": "1.0.0",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "electron": "electron ."
+  },
+  "dependencies": {
+    "next": "16.1.6",
+    "openai": "^4.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.13",
+    "electron": "^40.8.0",
+    "electron-packager": "^17.1.2",
+    "typescript": "5.9.3"
+  }
+}
