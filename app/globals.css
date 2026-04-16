@@ -957,3 +957,320 @@
     flex-wrap: wrap;
     margin-top: 10px;
 }
+/* ---------- IT Help Desk additions ---------- */
+
+.progressWrap {
+    margin-top: 8px;
+}
+
+.progressMeta {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--muted);
+}
+
+.progressBar {
+    width: 100%;
+    height: 12px;
+    background: #e5e7eb;
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.progressFill {
+    height: 100%;
+    background: var(--brand);
+    border-radius: 999px;
+    transition: width 0.25s ease;
+}
+
+.choiceGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 14px;
+}
+
+@media (max-width: 980px) {
+    .choiceGrid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.choiceBtn {
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 16px;
+    padding: 16px;
+    text-align: left;
+    cursor: pointer;
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.04);
+    transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+    .choiceBtn:hover {
+        border-color: var(--brandLine);
+        box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+        transform: translateY(-1px);
+    }
+
+.choiceBtnTitle {
+    font-weight: 900;
+    letter-spacing: -0.01em;
+    margin-bottom: 6px;
+    color: var(--text);
+}
+
+.choiceBtnText {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.4;
+}
+
+.summaryGrid {
+    display: grid;
+    gap: 12px;
+    margin-top: 14px;
+}
+
+.summaryCard {
+    border: 1px solid var(--brandLine);
+    background: linear-gradient(0deg, var(--brandSoft), #ffffff);
+    border-radius: 16px;
+    padding: 14px;
+    box-shadow: 0 8px 18px rgba(10, 122, 47, 0.08);
+}
+
+.summaryCardTitle {
+    font-weight: 900;
+    letter-spacing: -0.01em;
+    margin-bottom: 8px;
+}
+
+.statusBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 850;
+    border: 1px solid var(--line);
+    background: #fff;
+}
+
+    .statusBadge.success {
+        border-color: var(--brandLine);
+        background: var(--brandSoft);
+        color: #064c1d;
+    }
+
+    .statusBadge.warn {
+        border-color: var(--warnLine);
+        background: var(--warnSoft);
+        color: #7a4b00;
+    }
+
+    .statusBadge.error {
+        border-color: #fecaca;
+        background: #fff1f2;
+        color: #9f1239;
+    }
+
+.stepList {
+    display: grid;
+    gap: 12px;
+    margin-top: 14px;
+}
+
+.stepCard {
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 14px;
+    background: #fff;
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.04);
+}
+
+.stepTop {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.stepNumber {
+    display: inline-grid;
+    place-items: center;
+    min-width: 32px;
+    height: 32px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: var(--brandSoft);
+    border: 1px solid var(--brandLine);
+    font-size: 12px;
+    font-weight: 900;
+    color: #064c1d;
+}
+
+.stepTitle {
+    font-weight: 900;
+    letter-spacing: -0.01em;
+    margin-bottom: 8px;
+}
+
+.stepText {
+    color: var(--text);
+    line-height: 1.5;
+}
+
+.stepHelp {
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.4;
+}
+
+.stepDone {
+    border-color: var(--brandLine);
+    background: linear-gradient(0deg, var(--brandSoft), #ffffff);
+}
+
+    .stepDone .stepNumber {
+        background: var(--brand);
+        color: #fff;
+        border-color: var(--brand);
+    }
+
+.infoPanel {
+    margin-top: 14px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 14px;
+    background: #fff;
+}
+
+.infoPanelTitle {
+    font-weight: 900;
+    margin-bottom: 6px;
+}
+
+.helpdeskHero {
+    margin-top: 14px;
+    border: 1px solid var(--brandLine);
+    background: linear-gradient(0deg, var(--brandSoft), #f7fffb);
+    border-radius: 18px;
+    padding: 16px;
+    box-shadow: 0 8px 18px rgba(10, 122, 47, 0.08);
+}
+
+.helpdeskHeroTitle {
+    font-size: 20px;
+    font-weight: 950;
+    letter-spacing: -0.02em;
+    margin-bottom: 6px;
+}
+
+.helpdeskHeroText {
+    color: var(--muted);
+    line-height: 1.45;
+}
+
+.inlineMeta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.metaPill {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--text);
+}
+
+.helpdeskSplit {
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 14px;
+    margin-top: 14px;
+}
+
+@media (max-width: 980px) {
+    .helpdeskSplit {
+        grid-template-columns: 1fr;
+    }
+}
+
+.softBox {
+    margin-top: 12px;
+    padding: 12px;
+    border: 1px solid var(--line);
+    background: #fbfdff;
+    border-radius: 14px;
+}
+
+.softBoxTitle {
+    font-weight: 850;
+    margin-bottom: 6px;
+}
+
+.kvList {
+    display: grid;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.kvRow {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 10px;
+    align-items: start;
+}
+
+@media (max-width: 640px) {
+    .kvRow {
+        grid-template-columns: 1fr;
+        gap: 4px;
+    }
+}
+
+.kvKey {
+    font-size: 12px;
+    font-weight: 850;
+    color: var(--muted);
+}
+
+.kvValue {
+    color: var(--text);
+    line-height: 1.45;
+}
+
+.emptyState {
+    margin-top: 14px;
+    padding: 18px;
+    border: 1px dashed var(--brandLine);
+    border-radius: 16px;
+    background: linear-gradient(0deg, var(--brandSoft), #ffffff);
+    text-align: center;
+}
+
+.emptyStateTitle {
+    font-weight: 900;
+    margin-bottom: 6px;
+}
+
+.emptyStateText {
+    color: var(--muted);
+    line-height: 1.45;
+}

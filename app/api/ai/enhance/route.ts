@@ -120,6 +120,339 @@ function coerceUnknownToText(value: unknown): string {
     }
 }
 
+async function createJsonResponse(opts: {
+    client: OpenAI;
+    model: string;
+    instructions: string;
+    input: string;
+    max_output_tokens?: number;
+}) {
+    const response = await opts.client.responses.create({
+        model: opts.model,
+        instructions: opts.instructions,
+        input: opts.input,
+        max_output_tokens: opts.max_output_tokens ?? 1200,
+        store: false,
+        text: { format: { type: "json_object" } },
+    });
+
+    const raw = extractText(response) || "{}";
+    const parsed = safeJsonParse(raw);
+
+    return { raw, parsed };
+}
+
+/* ---------------- IT help desk helpers ---------------- */
+
+function summariseDevice(device: any, deviceProfile: any) {
+    const lines: string[] = [];
+
+    const make = asString(device?.make);
+    const model = asString(device?.model);
+    const year = asString(device?.year);
+    const os = asString(device?.os);
+    const notes = asString(device?.notes);
+
+    if (make || model) lines.push(`Device: ${[make, model].filter(Boolean).join(" ")}`);
+    if (year) lines.push(`Approximate year: ${year}`);
+    if (os) lines.push(`Operating system: ${os}`);
+    if (notes) lines.push(`Extra device notes: ${notes}`);
+
+    if (deviceProfile) {
+        const ageBand = asString(deviceProfile?.estimatedAgeBand);
+        const compatible =
+            typeof deviceProfile?.likelyWindows11Compatible === "boolean"
+                ? deviceProfile.likelyWindows11Compatible
+                    ? "likely yes"
+                    : "possibly no"
+                : "";
+        const confidence = asString(deviceProfile?.confidence);
+        const cpuTier = asString(deviceProfile?.roughSpecs?.cpuTier);
+        const ramEstimate = asString(deviceProfile?.roughSpecs?.ramEstimate);
+        const storageEstimate = asString(deviceProfile?.roughSpecs?.storageEstimate);
+        const profileNotes = asArray(deviceProfile?.notes);
+
+        if (ageBand) lines.push(`Estimated age band: ${ageBand}`);
+        if (compatible) lines.push(`Likely Windows 11 compatibility: ${compatible}`);
+        if (confidence) lines.push(`Device profile confidence: ${confidence}`);
+        if (cpuTier || ramEstimate || storageEstimate) {
+            lines.push(
+                `Rough profile: ${[cpuTier, ramEstimate, storageEstimate].filter(Boolean).join(", ")}`
+            );
+        }
+        if (profileNotes.length) {
+            lines.push(...profileNotes.map((n) => `Device profile note: ${n}`));
+        }
+    }
+
+    return lines.join("\n") || "No device details provided.";
+}
+
+function summariseTriageAnswers(issueCategory: string, triageAnswers: Record<string, any>) {
+    const lines: string[] = [];
+
+    if (issueCategory === "power") {
+        if (triageAnswers.powerStatus) lines.push(`Power button result: ${triageAnswers.powerStatus}`);
+        if (triageAnswers.chargerConnected) lines.push(`Charger connected: ${triageAnswers.chargerConnected}`);
+        if (triageAnswers.chargingLight) lines.push(`Charging light visible: ${triageAnswers.chargingLight}`);
+        if (triageAnswers.triedLongPress) lines.push(`Tried 10 second power hold: ${triageAnswers.triedLongPress}`);
+    }
+
+    if (issueCategory === "eqnet") {
+        if (triageAnswers.wifiDetected) lines.push(`Wi-Fi turned on: ${triageAnswers.wifiDetected}`);
+        if (triageAnswers.eqnetVisible) lines.push(`EQNet visible: ${triageAnswers.eqnetVisible}`);
+        if (triageAnswers.eqnetConnects) lines.push(`EQNet connection result: ${triageAnswers.eqnetConnects}`);
+        if (triageAnswers.internetWorks) lines.push(`Internet works after connection: ${triageAnswers.internetWorks}`);
+        if (triageAnswers.othersAffected) lines.push(`Other students affected nearby: ${triageAnswers.othersAffected}`);
+    }
+
+    if (issueCategory === "byox") {
+        if (triageAnswers.byoxInstalled) lines.push(`BYOx installed: ${triageAnswers.byoxInstalled}`);
+        if (triageAnswers.softwareIssueType) lines.push(`Closest software issue: ${triageAnswers.softwareIssueType}`);
+        if (triageAnswers.restartedDevice) lines.push(`Restarted already: ${triageAnswers.restartedDevice}`);
+        if (triageAnswers.errorMessage) lines.push(`Error or extra detail: ${triageAnswers.errorMessage}`);
+    }
+
+    if (issueCategory === "general") {
+        if (triageAnswers.generalProblem) lines.push(`Problem: ${triageAnswers.generalProblem}`);
+        if (triageAnswers.tryingToDo) lines.push(`Trying to do: ${triageAnswers.tryingToDo}`);
+        if (triageAnswers.whatHappenedInstead) lines.push(`What happened instead: ${triageAnswers.whatHappenedInstead}`);
+        if (triageAnswers.urgency) lines.push(`Urgency: ${triageAnswers.urgency}`);
+    }
+
+    return lines.join("\n") || "No structured triage answers provided.";
+}
+
+async function runHelpdeskTriage(opts: {
+    client: OpenAI;
+    model: string;
+    body: any;
+}) {
+    const student = opts.body?.student ?? {};
+    const device = opts.body?.device ?? {};
+    const deviceProfile = opts.body?.deviceProfile ?? null;
+    const issueCategory = asString(opts.body?.issueCategory);
+    const triageAnswers = (opts.body?.triageAnswers ?? {}) as Record<string, any>;
+
+    const instructions = `
+You output valid JSON only.
+
+You are a school IT triage assistant for students.
+
+Your job:
+- read the structured issue information
+- identify the most likely issue
+- explain it in student-friendly language
+- suggest short practical next steps
+- decide whether escalation is recommended
+- provide a short staff-facing summary
+
+Rules:
+- Australian spelling
+- Present tense
+- Student-safe tone
+- No blame
+- No dangerous or advanced technician steps
+- Do not invent confirmed facts about device hardware
+- If device details are inferred, treat them as rough context only
+- Keep recommendedNextSteps short, concrete, and practical
+- Use 3 to 5 next steps
+- Escalate when the issue sounds likely to need staff/admin/device repair support
+
+School troubleshooting rules:
+- For EQNet, BYOx, school software install, or school download issues, strongly consider these common blockers:
+  - third-party antivirus such as McAfee
+  - pending Windows updates
+  - pending optional updates
+  - active VPNs
+- If the issue sounds related to school downloads, onboarding, BYOx, EQNet, authentication, or school apps not installing properly, prioritise checking:
+  1. whether third-party antivirus is installed and temporarily removed or disabled
+  2. whether Windows updates are fully completed
+  3. whether optional updates are completed
+  4. whether any VPN is turned off
+- Mention these as practical student-facing checks when relevant.
+- Do not suggest disabling Microsoft Defender unless clearly necessary.
+- Do not suggest unsafe security behaviour beyond temporary removal or disabling of conflicting third-party antivirus where relevant.
+
+Return JSON only with EXACT keys:
+{
+  "likelyIssue": string,
+  "confidence": "low" | "medium" | "high",
+  "studentSummary": string,
+  "recommendedNextSteps": string[],
+  "escalationRecommended": boolean,
+  "staffSummary": string
+}
+`.trim();
+
+    const input = `
+Student:
+- MSID: ${asString(student?.msid) || "unknown"}
+- Year level: ${asString(student?.yearLevel) || "unknown"}
+- Device ownership: ${asString(student?.deviceOwnership) || "unknown"}
+
+Issue category:
+${issueCategory || "unknown"}
+
+Device details:
+${summariseDevice(device, deviceProfile)}
+
+Structured triage answers:
+${summariseTriageAnswers(issueCategory, triageAnswers)}
+
+Important school context:
+- EQ-related downloads and BYOx installs often fail because of third-party antivirus such as McAfee.
+- EQ-related downloads and BYOx installs may also fail if Windows updates are incomplete.
+- Optional updates may also be required.
+- VPNs can block or interfere with school downloads, onboarding, and network access.
+
+Return JSON only.
+`.trim();
+
+    const { raw, parsed } = await createJsonResponse({
+        client: opts.client,
+        model: opts.model,
+        instructions,
+        input,
+        max_output_tokens: 900,
+    });
+
+    if (!parsed) {
+        return NextResponse.json(
+            { ok: false, error: "Model returned non-json text.", raw: String(raw).slice(0, 400) },
+            { status: 502 }
+        );
+    }
+
+    return NextResponse.json({
+        ok: true,
+        likelyIssue: asString(parsed?.likelyIssue),
+        confidence: (asString(parsed?.confidence) || "medium").toLowerCase(),
+        studentSummary: asString(parsed?.studentSummary),
+        recommendedNextSteps: uniqBullets(asArray(parsed?.recommendedNextSteps), 5),
+        escalationRecommended: Boolean(parsed?.escalationRecommended),
+        staffSummary: asString(parsed?.staffSummary),
+    });
+}
+
+async function runHelpdeskFixSteps(opts: {
+    client: OpenAI;
+    model: string;
+    body: any;
+}) {
+    const student = opts.body?.student ?? {};
+    const device = opts.body?.device ?? {};
+    const issueCategory = asString(opts.body?.issueCategory);
+    const aiSummary = opts.body?.aiSummary ?? {};
+    const likelyIssue = asString(aiSummary?.likelyIssue || opts.body?.likelyIssue);
+    const studentSummary = asString(aiSummary?.studentSummary);
+    const recommendedNextSteps = asArray(aiSummary?.recommendedNextSteps || opts.body?.recommendedNextSteps);
+
+    const instructions = `
+You output valid JSON only.
+
+You are a school IT help assistant for students.
+
+Your job:
+Turn the issue summary into clear step-by-step troubleshooting instructions.
+
+Rules:
+- Australian spelling
+- Present tense
+- Student-friendly wording
+- Short, concrete steps
+- No dangerous, invasive, or admin-only actions
+- No BIOS, registry, command line, or hardware disassembly steps
+- Explain each step simply
+- Return 3 to 6 steps
+- Each step must be something a student can actually try
+
+School troubleshooting rules:
+- For EQNet, BYOx, school software install, or school download issues, prioritise these checks when relevant:
+  1. remove or disable third-party antivirus such as McAfee
+  2. complete Windows updates
+  3. complete optional updates
+  4. turn off any VPN
+- If these checks are relevant, they should appear early in the step list, not buried at the end.
+- Phrase them clearly for students.
+- If antivirus is mentioned, refer to third-party antivirus such as McAfee.
+- Do not suggest disabling Microsoft Defender unless there is a very strong reason.
+
+Return JSON only with EXACT keys:
+{
+  "fixSteps": [
+    {
+      "stepNumber": number,
+      "title": string,
+      "instruction": string,
+      "whyThisHelps": string
+    }
+  ]
+}
+`.trim();
+
+    const input = `
+Student:
+- MSID: ${asString(student?.msid) || "unknown"}
+- Year level: ${asString(student?.yearLevel) || "unknown"}
+
+Issue category:
+${issueCategory || "unknown"}
+
+Device:
+${summariseDevice(device, null)}
+
+Likely issue:
+${likelyIssue || "unknown"}
+
+Student summary:
+${studentSummary || "none"}
+
+Recommended next steps from triage:
+${recommendedNextSteps.map((s) => `- ${s}`).join("\n") || "- none"}
+
+Important school context:
+- EQ-related downloads and BYOx installs often fail because of third-party antivirus such as McAfee.
+- EQ-related downloads and BYOx installs may also fail if Windows updates are incomplete.
+- Optional updates may also be required.
+- VPNs can block or interfere with school downloads, onboarding, and network access.
+
+Return JSON only.
+`.trim();
+
+    const { raw, parsed } = await createJsonResponse({
+        client: opts.client,
+        model: opts.model,
+        instructions,
+        input,
+        max_output_tokens: 1200,
+    });
+
+    if (!parsed) {
+        return NextResponse.json(
+            { ok: false, error: "Model returned non-json text.", raw: String(raw).slice(0, 400) },
+            { status: 502 }
+        );
+    }
+
+    const fixSteps = Array.isArray(parsed?.fixSteps)
+        ? parsed.fixSteps
+            .map((step: any, index: number) => ({
+                stepNumber: Number(step?.stepNumber || index + 1),
+                title: asString(step?.title || `Step ${index + 1}`),
+                instruction: asString(step?.instruction),
+                whyThisHelps: asString(step?.whyThisHelps),
+            }))
+            .filter((step: any) => step.title && step.instruction)
+            .slice(0, 6)
+        : [];
+
+    return NextResponse.json({
+        ok: true,
+        fixSteps,
+    });
+}
+
 /* ---------------- output wrapping ---------------- */
 
 function wrapTextAsSimpleQlearnTable(title: string, bodyText: string) {
@@ -846,7 +1179,31 @@ export async function POST(req: Request) {
             return NextResponse.json({ ok: false, error: "Missing OPENAI_API_KEY." }, { status: 500 });
         }
 
+        const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const modelName = process.env.OPENAI_MODEL || "gpt-4.1-nano";
+
         const mode = asString(body?.internalMode || body?.mode || "enhance");
+
+        /* ---------- IT help desk modes ---------- */
+
+        if (mode === "triage") {
+            return await runHelpdeskTriage({
+                client,
+                model: modelName,
+                body,
+            });
+        }
+
+        if (mode === "fix_steps") {
+            return await runHelpdeskFixSteps({
+                client,
+                model: modelName,
+                body,
+            });
+        }
+
+        /* ---------- existing QLearn flow ---------- */
+
         const activity = body?.activity ?? body?.payload?.activity ?? body?.data?.activity ?? null;
 
         if (!activity && mode !== "suggest" && mode !== "teacher_rundown") {
@@ -918,9 +1275,6 @@ export async function POST(req: Request) {
         );
         const iconHtml = ICONS[inferredKey];
 
-        const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-        const modelName = process.env.OPENAI_MODEL || "gpt-4.1-nano";
-
         /* ---------- suggest ---------- */
 
         if (mode === "suggest") {
@@ -965,17 +1319,14 @@ ${prompt}
 Return json only.
 `.trim();
 
-            const response = await client.responses.create({
+            const { raw, parsed } = await createJsonResponse({
+                client,
                 model: modelName,
                 instructions,
                 input,
                 max_output_tokens: 450,
-                store: false,
-                text: { format: { type: "json_object" } },
             });
 
-            const raw = extractText(response) || "{}";
-            const parsed = safeJsonParse(raw);
             if (!parsed) {
                 return NextResponse.json(
                     {
@@ -1161,17 +1512,13 @@ ${teacherPrompt}
 Return JSON only.
 `.trim();
 
-        const response = await client.responses.create({
+        const { raw, parsed } = await createJsonResponse({
+            client,
             model: modelName,
             instructions,
             input,
             max_output_tokens: 1800,
-            store: false,
-            text: { format: { type: "json_object" } },
         });
-
-        const raw = extractText(response) || "{}";
-        const parsed = safeJsonParse(raw) as EnhanceOut | null;
 
         if (!parsed) {
             return NextResponse.json(
@@ -1184,16 +1531,18 @@ Return JSON only.
             );
         }
 
+        const typedParsed = parsed as EnhanceOut;
+
         const outTitle =
-            asString(parsed.title) ||
+            asString(typedParsed.title) ||
             asString(activity?.title) ||
             asString(activity?.label) ||
             "Activity";
 
-        let instructionsContent: unknown = parsed.instructions?.content ?? "";
-        let closeActivityContent: unknown = parsed.closeActivity?.content ?? "";
-        let teacherScriptContent: unknown = parsed.teacherScript?.content ?? "";
-        let resourceContent: unknown = parsed.resource?.content ?? "";
+        let instructionsContent: unknown = typedParsed.instructions?.content ?? "";
+        let closeActivityContent: unknown = typedParsed.closeActivity?.content ?? "";
+        let teacherScriptContent: unknown = typedParsed.teacherScript?.content ?? "";
+        let resourceContent: unknown = typedParsed.resource?.content ?? "";
 
         if (typeof resourceContent === "string") {
             const repaired = splitJsonObjectAndTrailingText(resourceContent);
@@ -1262,7 +1611,7 @@ Return JSON only.
 
         combinedOverview = injectIconIntoFirstHeaderStrong(combinedOverview, iconHtml);
 
-        const diffAll = coerceDiff(parsed.diff ?? {}, teacherPrompt, outTitle);
+        const diffAll = coerceDiff(typedParsed.diff ?? {}, teacherPrompt, outTitle);
         const diff = {
             helpfulHints: includeHelpfulHints ? diffAll.helpfulHints : [],
             tooHardTryThis: includeTooHard ? diffAll.tooHardTryThis : [],
@@ -1271,18 +1620,18 @@ Return JSON only.
         };
 
         const pq = includePowerfulQuestions
-            ? asPowerfulQuestions(parsed.powerfulQuestions).slice(0, 4)
+            ? asPowerfulQuestions(typedParsed.powerfulQuestions).slice(0, 4)
             : [];
 
-        const canvaPrompt = includeCanva ? asString(parsed.canvaPrompt) : "";
-        const notebookLmPrompt = includeNotebookLM ? asString(parsed.notebookLmPrompt) : "";
-        const adobeExpressActivity = includeAdobe ? asString(parsed.adobeExpressActivity) : "";
-        const aiActivityIdeas = includeAiActivityIdeas ? asString(parsed.aiActivityIdeas) : "";
+        const canvaPrompt = includeCanva ? asString(typedParsed.canvaPrompt) : "";
+        const notebookLmPrompt = includeNotebookLM ? asString(typedParsed.notebookLmPrompt) : "";
+        const adobeExpressActivity = includeAdobe ? asString(typedParsed.adobeExpressActivity) : "";
+        const aiActivityIdeas = includeAiActivityIdeas ? asString(typedParsed.aiActivityIdeas) : "";
 
-        const nasotUsed = Array.isArray(parsed.nasotUsed)
-            ? parsed.nasotUsed.map(String).filter(Boolean)
-            : typeof parsed.nasotUsed === "string"
-                ? parsed.nasotUsed
+        const nasotUsed = Array.isArray(typedParsed.nasotUsed)
+            ? typedParsed.nasotUsed.map(String).filter(Boolean)
+            : typeof typedParsed.nasotUsed === "string"
+                ? typedParsed.nasotUsed
                     .split(",")
                     .map((x) => x.trim())
                     .filter(Boolean)
@@ -1301,9 +1650,9 @@ Return JSON only.
             outputs: {
                 instructions: coerceUnknownToText(instructionsContent)
                     ? {
-                        title: asString(parsed.instructions?.title) || "Instructions",
+                        title: asString(typedParsed.instructions?.title) || "Instructions",
                         content: forceVisualHtml(
-                            asString(parsed.instructions?.title) || "Instructions",
+                            asString(typedParsed.instructions?.title) || "Instructions",
                             tidyOutput(coerceUnknownToText(instructionsContent))
                         ),
                     }
@@ -1311,9 +1660,9 @@ Return JSON only.
 
                 closeActivity: coerceUnknownToText(closeActivityContent)
                     ? {
-                        title: asString(parsed.closeActivity?.title) || "Close activity",
+                        title: asString(typedParsed.closeActivity?.title) || "Close activity",
                         content: forceVisualHtml(
-                            asString(parsed.closeActivity?.title) || "Close activity",
+                            asString(typedParsed.closeActivity?.title) || "Close activity",
                             tidyOutput(coerceUnknownToText(closeActivityContent))
                         ),
                     }
@@ -1321,9 +1670,9 @@ Return JSON only.
 
                 teacherScript: coerceUnknownToText(teacherScriptContent)
                     ? {
-                        title: asString(parsed.teacherScript?.title) || "Teacher script",
+                        title: asString(typedParsed.teacherScript?.title) || "Teacher script",
                         content: forceVisualHtml(
-                            asString(parsed.teacherScript?.title) || "Teacher script",
+                            asString(typedParsed.teacherScript?.title) || "Teacher script",
                             tidyOutput(coerceUnknownToText(teacherScriptContent))
                         ),
                     }
@@ -1332,9 +1681,9 @@ Return JSON only.
                 resource:
                     isJsonTableShape(resourceContent) || coerceUnknownToText(resourceContent)
                         ? {
-                            title: asString(parsed.resource?.title) || "Resource",
+                            title: asString(typedParsed.resource?.title) || "Resource",
                             content: forceVisualHtml(
-                                asString(parsed.resource?.title) || "Resource",
+                                asString(typedParsed.resource?.title) || "Resource",
                                 isJsonTableShape(resourceContent)
                                     ? resourceContent
                                     : tidyOutput(coerceUnknownToText(resourceContent))
