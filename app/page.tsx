@@ -1,30 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
-
-type Stage = "landing" | "helpdesk";
-
-type Step =
-    | "intake"
-    | "device"
-    | "issue"
-    | "triage"
-    | "summary"
-    | "fix"
-    | "resolution"
-    | "complete";
+import Image from "next/image";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 type IssueCategory = "power" | "eqnet" | "byox" | "general" | "";
 
-type ResolutionLevel = "full" | "partial" | "none" | "";
-
-type StudentState = {
+type StudentInfo = {
     msid: string;
     yearLevel: string;
-    deviceOwnership: "BYOx" | "School" | "";
+    deviceOwnership: string;
 };
 
-type DeviceState = {
+type DeviceInfo = {
     make: string;
     model: string;
     year: string;
@@ -33,11 +20,9 @@ type DeviceState = {
 };
 
 type DeviceProfile = {
-    normalisedMake?: string;
-    normalisedModel?: string;
     estimatedAgeBand?: string;
     likelyWindows11Compatible?: boolean;
-    confidence?: "low" | "medium" | "high";
+    confidence?: string;
     roughSpecs?: {
         cpuTier?: string;
         ramEstimate?: string;
@@ -46,58 +31,169 @@ type DeviceProfile = {
     notes?: string[];
 } | null;
 
-type AISummary = {
+type TriageAnswers = Record<string, string>;
+
+type AiSummary = {
     likelyIssue: string;
     confidence: "low" | "medium" | "high";
     studentSummary: string;
     recommendedNextSteps: string[];
     escalationRecommended: boolean;
     staffSummary: string;
-} | null;
+};
 
 type FixStep = {
     stepNumber: number;
     title: string;
     instruction: string;
-    whyThisHelps?: string;
-    done?: boolean;
+    whyThisHelps: string;
+    howToDoThis: string;
+    commonProblem: string;
 };
 
-function getStepNumber(step: Step) {
-    const order: Step[] = [
-        "intake",
-        "device",
-        "issue",
-        "triage",
-        "summary",
-        "fix",
-        "resolution",
-        "complete",
+type ChatMessage = {
+    role: "assistant" | "user";
+    text: string;
+};
+
+type WizardStep =
+    | "landing"
+    | "student"
+    | "device"
+    | "issue"
+    | "triage"
+    | "summary"
+    | "steps"
+    | "complete";
+
+const ISSUE_OPTIONS: Array<{
+    key: Exclude<IssueCategory, "">;
+    title: string;
+    text: string;
+}> = [
+        {
+            key: "power",
+            title: "My laptop is not turning on",
+            text: "Power, charger, black screen, or startup problems.",
+        },
+        {
+            key: "eqnet",
+            title: "Internet or EQNet is not working",
+            text: "Wi-Fi, EQNet visibility, connection, or browsing issues.",
+        },
+        {
+            key: "byox",
+            title: "BYOx or school software is not working",
+            text: "Install issues, sign-in issues, missing apps, or Office problems.",
+        },
+        {
+            key: "general",
+            title: "Something else is wrong",
+            text: "Use this when the issue does not fit the main categories.",
+        },
     ];
-    return order.indexOf(step) + 1;
+
+const WIZARD_ORDER: WizardStep[] = [
+    "landing",
+    "student",
+    "device",
+    "issue",
+    "triage",
+    "summary",
+    "steps",
+    "complete",
+];
+
+function confidenceLabel(confidence?: string) {
+    if (confidence === "high") return "High confidence";
+    if (confidence === "low") return "Low confidence";
+    return "Medium confidence";
 }
 
-function getProgressPercent(step: Step) {
-    const current = getStepNumber(step);
-    const total = 8;
-    return Math.max(8, Math.round((current / total) * 100));
+function statusClass(escalationRecommended?: boolean) {
+    return escalationRecommended ? "warn" : "success";
+}
+
+function getInitialTriageAnswers(category: IssueCategory): TriageAnswers {
+    if (category === "power") {
+        return {
+            powerStatus: "",
+            chargerConnected: "",
+            chargingLight: "",
+            triedLongPress: "",
+        };
+    }
+
+    if (category === "eqnet") {
+        return {
+            wifiDetected: "",
+            eqnetVisible: "",
+            eqnetConnects: "",
+            internetWorks: "",
+            othersAffected: "",
+        };
+    }
+
+    if (category === "byox") {
+        return {
+            byoxInstalled: "",
+            softwareIssueType: "",
+            restartedDevice: "",
+            errorMessage: "",
+        };
+    }
+
+    if (category === "general") {
+        return {
+            generalProblem: "",
+            tryingToDo: "",
+            whatHappenedInstead: "",
+            urgency: "",
+        };
+    }
+
+    return {};
+}
+
+function isPhysicalStep(step: FixStep | null) {
+    if (!step) return false;
+
+    const text = `${step.title} ${step.instruction} ${step.howToDoThis}`.toLowerCase();
+
+    return (
+        text.includes("power button") ||
+        text.includes("plug") ||
+        text.includes("charger") ||
+        text.includes("charging light") ||
+        text.includes("power outlet") ||
+        text.includes("cable") ||
+        text.includes("hold the power button")
+    );
+}
+
+async function parseJsonResponse(res: Response) {
+    const text = await res.text();
+    let data: any = null;
+
+    try {
+        data = JSON.parse(text);
+    } catch {
+        throw new Error("The server returned an invalid response.");
+    }
+
+    return data;
 }
 
 export default function Page() {
-    const [stage, setStage] = useState<Stage>("landing");
-    const [step, setStep] = useState<Step>("intake");
+    const [wizardStep, setWizardStep] = useState<WizardStep>("landing");
 
-    const [sessionId, setSessionId] = useState("");
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState("");
-
-    const [student, setStudent] = useState<StudentState>({
+    const [student, setStudent] = useState<StudentInfo>({
         msid: "",
         yearLevel: "",
-        deviceOwnership: "",
+        deviceOwnership: "BYOD",
     });
 
-    const [device, setDevice] = useState<DeviceState>({
+    const [device, setDevice] = useState<DeviceInfo>({
         make: "",
         model: "",
         year: "",
@@ -105,47 +201,83 @@ export default function Page() {
         notes: "",
     });
 
-    const [deviceProfile, setDeviceProfile] = useState<DeviceProfile>(null);
+    const [deviceProfile] = useState<DeviceProfile>(null);
+
     const [issueCategory, setIssueCategory] = useState<IssueCategory>("");
+    const [triageAnswers, setTriageAnswers] = useState<TriageAnswers>({});
 
-    const [triageAnswers, setTriageAnswers] = useState<Record<string, any>>({
-        powerStatus: "",
-        chargerConnected: "",
-        chargingLight: "",
-        triedLongPress: "",
-        wifiDetected: "",
-        eqnetVisible: "",
-        eqnetConnects: "",
-        internetWorks: "",
-        othersAffected: "",
-        byoxInstalled: "",
-        softwareIssueType: "",
-        restartedDevice: "",
-        errorMessage: "",
-        generalProblem: "",
-        tryingToDo: "",
-        whatHappenedInstead: "",
-        urgency: "",
-    });
+    const [loadingSummary, setLoadingSummary] = useState(false);
+    const [loadingFixSteps, setLoadingFixSteps] = useState(false);
+    const [error, setError] = useState("");
 
-    const [aiSummary, setAiSummary] = useState<AISummary>(null);
+    const [aiSummary, setAiSummary] = useState<AiSummary | null>(null);
     const [fixSteps, setFixSteps] = useState<FixStep[]>([]);
-    const [resolutionLevel, setResolutionLevel] = useState<ResolutionLevel>("");
-    const [extraNotes, setExtraNotes] = useState("");
-    const [location, setLocation] = useState("");
+    const [completedSteps, setCompletedSteps] = useState<number[]>([]);
+    const [activeStepIndex, setActiveStepIndex] = useState(0);
+    const [openExplainIndex, setOpenExplainIndex] = useState<number | null>(null);
 
-    const progressPercent = useMemo(() => getProgressPercent(step), [step]);
+    const [isChatOpen, setIsChatOpen] = useState(false);
+    const [chatInput, setChatInput] = useState("");
+    const [chatLoading, setChatLoading] = useState(false);
+    const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+        {
+            role: "assistant",
+            text: "Hi, I’m your IT support helper. I can help with general school IT questions now, and once your troubleshoot steps are ready I can explain the current step in simple language.",
+        },
+    ]);
 
-    function resetAll() {
-        setStage("landing");
-        setStep("intake");
-        setSessionId("");
-        setLoading(false);
-        setError("");
+    const chatMessagesRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        if (chatMessagesRef.current) {
+            chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
+        }
+    }, [chatMessages, chatLoading, isChatOpen]);
+
+    useEffect(() => {
+        setTriageAnswers(getInitialTriageAnswers(issueCategory));
+    }, [issueCategory]);
+
+    const currentStep = useMemo(() => fixSteps[activeStepIndex] ?? null, [fixSteps, activeStepIndex]);
+
+    useEffect(() => {
+        if (!currentStep) return;
+
+        setChatMessages([
+            {
+                role: "assistant",
+                text: `You are now on Step ${currentStep.stepNumber}: ${currentStep.title}. Ask me what to do, what this should look like, or what to try if you are stuck.`,
+            },
+        ]);
+        setChatInput("");
+    }, [activeStepIndex, currentStep]);
+
+    const wizardIndex = WIZARD_ORDER.indexOf(wizardStep);
+    const wizardPercent = Math.round(((wizardIndex + 1) / WIZARD_ORDER.length) * 100);
+
+    const fixCompletionPercent = useMemo(() => {
+        if (!fixSteps.length) return 0;
+        return Math.round((completedSteps.length / fixSteps.length) * 100);
+    }, [completedSteps, fixSteps]);
+
+    function updateStudent(field: keyof StudentInfo, value: string) {
+        setStudent((prev) => ({ ...prev, [field]: value }));
+    }
+
+    function updateDevice(field: keyof DeviceInfo, value: string) {
+        setDevice((prev) => ({ ...prev, [field]: value }));
+    }
+
+    function updateTriage(field: string, value: string) {
+        setTriageAnswers((prev) => ({ ...prev, [field]: value }));
+    }
+
+    function resetWorkflow() {
+        setWizardStep("landing");
         setStudent({
             msid: "",
             yearLevel: "",
-            deviceOwnership: "",
+            deviceOwnership: "BYOD",
         });
         setDevice({
             make: "",
@@ -154,196 +286,101 @@ export default function Page() {
             os: "",
             notes: "",
         });
-        setDeviceProfile(null);
         setIssueCategory("");
-        setTriageAnswers({
-            powerStatus: "",
-            chargerConnected: "",
-            chargingLight: "",
-            triedLongPress: "",
-            wifiDetected: "",
-            eqnetVisible: "",
-            eqnetConnects: "",
-            internetWorks: "",
-            othersAffected: "",
-            byoxInstalled: "",
-            softwareIssueType: "",
-            restartedDevice: "",
-            errorMessage: "",
-            generalProblem: "",
-            tryingToDo: "",
-            whatHappenedInstead: "",
-            urgency: "",
-        });
+        setTriageAnswers({});
         setAiSummary(null);
         setFixSteps([]);
-        setResolutionLevel("");
-        setExtraNotes("");
-        setLocation("");
+        setCompletedSteps([]);
+        setActiveStepIndex(0);
+        setOpenExplainIndex(null);
+        setError("");
+        setIsChatOpen(false);
+        setChatInput("");
+        setChatMessages([
+            {
+                role: "assistant",
+                text: "Hi, I’m your IT support helper. I can help with general school IT questions now, and once your troubleshoot steps are ready I can explain the current step in simple language.",
+            },
+        ]);
     }
 
-    function goToHelpdesk() {
-        setStage("helpdesk");
-        setStep("intake");
+    function canContinueFromStudent() {
+        return !!(student.msid.trim() && student.yearLevel.trim() && student.deviceOwnership.trim());
+    }
+
+    function canContinueFromDevice() {
+        return !!device.os.trim();
+    }
+
+    function canContinueFromIssue() {
+        return !!issueCategory;
+    }
+
+    function canContinueFromTriage() {
+        return true;
+    }
+
+    function goNext() {
         setError("");
+
+        if (wizardStep === "student" && !canContinueFromStudent()) {
+            setError("Enter the student details first.");
+            return;
+        }
+
+        if (wizardStep === "device" && !canContinueFromDevice()) {
+            setError("Choose the operating system before continuing.");
+            return;
+        }
+
+        if (wizardStep === "issue" && !canContinueFromIssue()) {
+            setError("Choose the closest issue type first.");
+            return;
+        }
+
+        if (wizardStep === "landing") setWizardStep("student");
+        else if (wizardStep === "student") setWizardStep("device");
+        else if (wizardStep === "device") setWizardStep("issue");
+        else if (wizardStep === "issue") setWizardStep("triage");
+        else if (wizardStep === "triage") void runTriageAndSteps();
+        else if (wizardStep === "summary") setWizardStep("steps");
+        else if (wizardStep === "steps") setWizardStep("complete");
     }
 
     function goBack() {
         setError("");
 
-        if (step === "device") setStep("intake");
-        else if (step === "issue") setStep("device");
-        else if (step === "triage") setStep("issue");
-        else if (step === "summary") setStep("triage");
-        else if (step === "fix") setStep("summary");
-        else if (step === "resolution") setStep("fix");
-        else if (step === "complete") setStep("resolution");
+        if (wizardStep === "student") setWizardStep("landing");
+        else if (wizardStep === "device") setWizardStep("student");
+        else if (wizardStep === "issue") setWizardStep("device");
+        else if (wizardStep === "triage") setWizardStep("issue");
+        else if (wizardStep === "summary") setWizardStep("triage");
+        else if (wizardStep === "steps") setWizardStep("summary");
+        else if (wizardStep === "complete") setWizardStep("steps");
     }
 
-    function updateStudent<K extends keyof StudentState>(key: K, value: StudentState[K]) {
-        setStudent((prev) => ({ ...prev, [key]: value }));
-    }
-
-    function updateDevice<K extends keyof DeviceState>(key: K, value: DeviceState[K]) {
-        setDevice((prev) => ({ ...prev, [key]: value }));
-    }
-
-    function updateTriage(key: string, value: any) {
-        setTriageAnswers((prev) => ({ ...prev, [key]: value }));
-    }
-
-    async function handleStartSession() {
-        setError("");
-
-        if (!student.msid.trim()) {
-            setError("Enter the student MSID.");
-            return;
-        }
-        if (!student.yearLevel) {
-            setError("Choose the year level.");
-            return;
-        }
-        if (!student.deviceOwnership) {
-            setError("Choose whether this is a BYOx or school device.");
-            return;
-        }
-
-        setLoading(true);
-        try {
-            try {
-                const res = await fetch("/api/helpdesk/start-session", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(student),
-                });
-
-                const data = await res.json().catch(() => ({}));
-
-                if (res.ok && data?.ok && data?.sessionId) {
-                    setSessionId(String(data.sessionId));
-                } else {
-                    setSessionId(`local-${Date.now()}`);
-                }
-            } catch {
-                setSessionId(`local-${Date.now()}`);
-            }
-
-            setStep("device");
-        } catch (err: any) {
-            setError(err?.message || "Could not start the session.");
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    async function handleDeviceNext() {
-        setError("");
-
-        if (!device.make.trim() && !device.model.trim() && !device.year.trim() && !device.os.trim()) {
-            setStep("issue");
-            return;
-        }
-
-        setLoading(true);
-        try {
-            try {
-                const res = await fetch("/api/helpdesk/device-profile", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        sessionId,
-                        ...device,
-                    }),
-                });
-
-                const data = await res.json().catch(() => ({}));
-
-                if (res.ok && data?.ok && data?.deviceProfile) {
-                    setDeviceProfile(data.deviceProfile);
-                } else {
-                    setDeviceProfile(null);
-                }
-            } catch {
-                setDeviceProfile(null);
-            }
-
-            setStep("issue");
-        } catch (err: any) {
-            setError(err?.message || "Could not check the laptop details.");
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    function handleIssueSelect(category: IssueCategory) {
-        setIssueCategory(category);
-        setError("");
-        setStep("triage");
-    }
-
-    function validateTriage() {
+    async function runTriageAndSteps() {
         if (!issueCategory) {
-            return "Choose an issue type first.";
-        }
-
-        if (issueCategory === "power") {
-            if (!triageAnswers.powerStatus) return "Choose whether anything happens when the power button is pressed.";
-        }
-
-        if (issueCategory === "eqnet") {
-            if (!triageAnswers.wifiDetected) return "Choose whether Wi-Fi is turned on.";
-            if (!triageAnswers.eqnetVisible) return "Choose whether EQNet is visible.";
-        }
-
-        if (issueCategory === "byox") {
-            if (!triageAnswers.byoxInstalled) return "Choose whether BYOx is installed.";
-            if (!triageAnswers.softwareIssueType) return "Choose the closest issue.";
-        }
-
-        if (issueCategory === "general") {
-            if (!String(triageAnswers.generalProblem || "").trim()) return "Describe the problem.";
-        }
-
-        return "";
-    }
-
-    async function handleGenerateSummary() {
-        const validationMessage = validateTriage();
-        if (validationMessage) {
-            setError(validationMessage);
+            setError("Choose the closest issue type first.");
             return;
         }
 
         setError("");
-        setLoading(true);
+        setLoadingSummary(true);
+        setLoadingFixSteps(false);
+        setAiSummary(null);
+        setFixSteps([]);
+        setCompletedSteps([]);
+        setActiveStepIndex(0);
+        setOpenExplainIndex(null);
+        setIsChatOpen(false);
 
         try {
-            const res = await fetch("/api/ai/enhance", {
+            const triageRes = await fetch("/api/helpdesk", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     mode: "triage",
-                    sessionId,
                     student,
                     device,
                     deviceProfile,
@@ -352,916 +389,1058 @@ export default function Page() {
                 }),
             });
 
-            const data = await res.json().catch(() => ({}));
+            const triageData = await parseJsonResponse(triageRes);
 
-            if (!res.ok || data?.ok === false) {
-                throw new Error(data?.error || `AI route failed (${res.status})`);
+            if (!triageRes.ok || !triageData?.ok) {
+                throw new Error(triageData?.error || "Could not create the triage summary.");
             }
 
-            setAiSummary({
-                likelyIssue: String(data?.likelyIssue || "").trim(),
-                confidence: (data?.confidence || "medium") as "low" | "medium" | "high",
-                studentSummary: String(data?.studentSummary || "").trim(),
-                recommendedNextSteps: Array.isArray(data?.recommendedNextSteps)
-                    ? data.recommendedNextSteps.map(String).filter(Boolean)
+            const summary: AiSummary = {
+                likelyIssue: triageData.likelyIssue || "",
+                confidence: triageData.confidence || "medium",
+                studentSummary: triageData.studentSummary || "",
+                recommendedNextSteps: Array.isArray(triageData.recommendedNextSteps)
+                    ? triageData.recommendedNextSteps
                     : [],
-                escalationRecommended: Boolean(data?.escalationRecommended),
-                staffSummary: String(data?.staffSummary || "").trim(),
-            });
+                escalationRecommended: Boolean(triageData.escalationRecommended),
+                staffSummary: triageData.staffSummary || "",
+            };
 
-            setStep("summary");
-        } catch (err: any) {
-            setError(err?.message || "Could not generate the IT summary.");
-        } finally {
-            setLoading(false);
-        }
-    }
+            setAiSummary(summary);
+            setLoadingSummary(false);
+            setLoadingFixSteps(true);
 
-    async function handleGenerateFixSteps() {
-        if (!aiSummary) {
-            setError("Generate the AI summary first.");
-            return;
-        }
-
-        setError("");
-        setLoading(true);
-
-        try {
-            const res = await fetch("/api/ai/enhance", {
+            const fixRes = await fetch("/api/helpdesk", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     mode: "fix_steps",
-                    sessionId,
                     student,
                     device,
                     issueCategory,
-                    aiSummary,
+                    aiSummary: summary,
                 }),
             });
 
-            const data = await res.json().catch(() => ({}));
+            const fixData = await parseJsonResponse(fixRes);
 
-            if (!res.ok || data?.ok === false) {
-                throw new Error(data?.error || `AI route failed (${res.status})`);
+            if (!fixRes.ok || !fixData?.ok) {
+                throw new Error(fixData?.error || "Could not create troubleshooting steps.");
             }
 
-            const nextSteps: FixStep[] = Array.isArray(data?.fixSteps)
-                ? data.fixSteps.map((item: any, index: number) => ({
-                    stepNumber: Number(item?.stepNumber || index + 1),
-                    title: String(item?.title || `Step ${index + 1}`).trim(),
-                    instruction: String(item?.instruction || "").trim(),
-                    whyThisHelps: String(item?.whyThisHelps || "").trim(),
-                    done: false,
-                }))
-                : [];
-
-            setFixSteps(nextSteps);
-            setStep("fix");
+            const safeSteps: FixStep[] = Array.isArray(fixData.fixSteps) ? fixData.fixSteps : [];
+            setFixSteps(safeSteps);
+            setActiveStepIndex(0);
+            setChatMessages([
+                {
+                    role: "assistant",
+                    text: "Your troubleshooting steps are ready. I will stay focused on the current step and explain exactly what to do, what it should look like, or what to try if you get stuck.",
+                },
+            ]);
+            setWizardStep("summary");
         } catch (err: any) {
-            setError(err?.message || "Could not generate the fix steps.");
+            setError(err?.message || "Something went wrong.");
         } finally {
-            setLoading(false);
+            setLoadingSummary(false);
+            setLoadingFixSteps(false);
         }
     }
 
     function markStepDone(stepNumber: number) {
-        setFixSteps((prev) =>
-            prev.map((item) =>
-                item.stepNumber === stepNumber ? { ...item, done: !item.done } : item
-            )
-        );
+        setCompletedSteps((prev) => {
+            if (prev.includes(stepNumber)) return prev;
+
+            const updated = [...prev, stepNumber];
+            const currentIndex = fixSteps.findIndex((step) => step.stepNumber === stepNumber);
+            const nextIndex = currentIndex + 1;
+
+            if (nextIndex < fixSteps.length) {
+                setActiveStepIndex(nextIndex);
+            }
+
+            return updated;
+        });
     }
 
-    function handleResolution(value: ResolutionLevel) {
-        setResolutionLevel(value);
-        setStep("complete");
+    async function sendChatMessage(messageText?: string) {
+        const finalMessage = (messageText ?? chatInput).trim();
+        if (!finalMessage) return;
+
+        setChatMessages((prev) => [...prev, { role: "user", text: finalMessage }]);
+        setChatInput("");
+        setChatLoading(true);
+
+        try {
+            if (!currentStep) {
+                setChatMessages((prev) => [
+                    ...prev,
+                    {
+                        role: "assistant",
+                        text: "I can help with general troubleshooting first. Tell me whether this is a power issue, EQNet issue, BYOx issue, or another school laptop problem.",
+                    },
+                ]);
+                return;
+            }
+
+            const res = await fetch("/api/helpdesk", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    mode: "chat_help",
+                    student,
+                    device,
+                    issueCategory,
+                    aiSummary,
+                    currentStep,
+                    userMessage: finalMessage,
+                }),
+            });
+
+            const data = await parseJsonResponse(res);
+
+            setChatMessages((prev) => [
+                ...prev,
+                {
+                    role: "assistant",
+                    text: data?.reply || "I couldn’t load a reply just then. Try asking what to do first.",
+                },
+            ]);
+        } catch {
+            setChatMessages((prev) => [
+                ...prev,
+                {
+                    role: "assistant",
+                    text: "That did not load properly. Try again, or ask staff if the problem keeps happening.",
+                },
+            ]);
+        } finally {
+            setChatLoading(false);
+        }
     }
 
-    const completedFixCount = fixSteps.filter((item) => item.done).length;
+    function renderTriageFields() {
+        if (!issueCategory) return null;
 
-    if (stage === "landing") {
-        return (
-            <div className="landingWrap">
-                <div className="landing">
-                    <img
-                        src="/School_Logo.png"
-                        alt="Maroochydore State High School logo"
-                        className="landingLogo"
-                    />
-
-                    <div className="landingTitle">MSHS IT Help Desk</div>
-                    <div className="landingTag">
-                        Student device support, step by step.
-                    </div>
-
-                    <div className="landingCard">
-                        <div className="small" style={{ fontSize: 14 }}>
-                            Get help with your laptop, EQNet, BYOx, school software, or a general IT issue.
-                        </div>
-
-                        <button className="startBtn" onClick={goToHelpdesk}>
-                            Start IT Help
-                        </button>
-
-                        <div className="previewBox" style={{ textAlign: "left" }}>
-                            <div className="previewTitle">This can help with</div>
-                            <div className="small">
-                                • Laptop not turning on
-                                <br />
-                                • EQNet or internet not working
-                                <br />
-                                • BYOx or school software issues
-                                <br />
-                                • General device problems
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="appShell">
-            <div className="topBar">
-                <div className="brandMini">
-                    <div
-                        className="brandMiniLogo"
-                        style={{
-                            display: "grid",
-                            placeItems: "center",
-                            fontWeight: 900,
-                            color: "var(--brand)",
-                        }}
-                    >
-                        IT
-                    </div>
-                    <div>
-                        <div className="brandMiniTitle">MSHS IT Help Desk</div>
-                        <div className="brandMiniSub">
-                            Step {getStepNumber(step)} of 8
-                        </div>
-                    </div>
-                </div>
-
-                <button className="btnGhost" onClick={resetAll}>
-                    Start again
-                </button>
-            </div>
-
-            <div className="card" style={{ marginBottom: 14 }}>
-                <div className="progressWrap">
-                    <div className="progressMeta">
-                        <span>Progress</span>
-                        <span>{progressPercent}%</span>
-                    </div>
-                    <div className="progressBar">
-                        <div className="progressFill" style={{ width: `${progressPercent}%` }} />
-                    </div>
-                </div>
-            </div>
-
-            {error && <div className="errorBox">{error}</div>}
-
-            {step === "intake" && (
-                <div className="card">
-                    <div className="sectionTitle">Let’s get your IT help request started</div>
-                    <div className="small">
-                        Enter your student details first so the session can be tracked properly.
-                    </div>
-
+        if (issueCategory === "power") {
+            return (
+                <>
                     <div className="field">
-                        <div className="label">Student MSID</div>
-                        <input
-                            className="input"
-                            value={student.msid}
-                            onChange={(e) => updateStudent("msid", e.target.value)}
-                            placeholder="e.g. 12345678"
-                        />
-                    </div>
-
-                    <div className="field">
-                        <div className="label">Year level</div>
-                        <select
-                            className="input"
-                            value={student.yearLevel}
-                            onChange={(e) => updateStudent("yearLevel", e.target.value)}
-                        >
-                            <option value="">Choose year level</option>
-                            <option value="7">Year 7</option>
-                            <option value="8">Year 8</option>
-                            <option value="9">Year 9</option>
-                            <option value="10">Year 10</option>
-                            <option value="11">Year 11</option>
-                            <option value="12">Year 12</option>
+                        <div className="label">What happens when you press the power button?</div>
+                        <select className="input" value={triageAnswers.powerStatus || ""} onChange={(e) => updateTriage("powerStatus", e.target.value)}>
+                            <option value="">Choose one</option>
+                            <option value="nothing happens">Nothing happens</option>
+                            <option value="lights come on but no screen">Lights come on but no screen</option>
+                            <option value="screen flashes briefly">Screen flashes briefly</option>
+                            <option value="turns on then turns off">Turns on then turns off</option>
                         </select>
                     </div>
 
                     <div className="field">
-                        <div className="label">Device type</div>
-                        <div className="miniRow">
-                            <button
-                                className={student.deviceOwnership === "BYOx" ? "btnPrimary" : "btnGhost"}
-                                onClick={() => updateStudent("deviceOwnership", "BYOx")}
-                                type="button"
-                            >
-                                BYOx device
-                            </button>
-                            <button
-                                className={student.deviceOwnership === "School" ? "btnPrimary" : "btnGhost"}
-                                onClick={() => updateStudent("deviceOwnership", "School")}
-                                type="button"
-                            >
-                                School-managed device
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="actions">
-                        <button className="btnGhost" onClick={resetAll}>
-                            Back
-                        </button>
-                        <button className="btnPrimary" onClick={handleStartSession} disabled={loading}>
-                            {loading ? "Starting..." : "Continue"}
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {step === "device" && (
-                <div className="card">
-                    <div className="sectionTitle">Tell us about your laptop</div>
-                    <div className="small">
-                        Add what you know. If you are not sure, leave it blank and keep going.
-                    </div>
-
-                    <div className="miniRow">
-                        <div className="field" style={{ marginTop: 0 }}>
-                            <div className="label">Make</div>
-                            <input
-                                className="input"
-                                value={device.make}
-                                onChange={(e) => updateDevice("make", e.target.value)}
-                                placeholder="Lenovo, HP, Dell..."
-                            />
-                        </div>
-                        <div className="field" style={{ marginTop: 0 }}>
-                            <div className="label">Model</div>
-                            <input
-                                className="input"
-                                value={device.model}
-                                onChange={(e) => updateDevice("model", e.target.value)}
-                                placeholder="ThinkPad, ProBook..."
-                            />
-                        </div>
-                    </div>
-
-                    <div className="miniRow">
-                        <div className="field" style={{ marginTop: 0 }}>
-                            <div className="label">Approximate year</div>
-                            <input
-                                className="input"
-                                value={device.year}
-                                onChange={(e) => updateDevice("year", e.target.value)}
-                                placeholder="2020"
-                            />
-                        </div>
-                        <div className="field" style={{ marginTop: 0 }}>
-                            <div className="label">Operating system</div>
-                            <select
-                                className="input"
-                                value={device.os}
-                                onChange={(e) => updateDevice("os", e.target.value)}
-                            >
-                                <option value="">Choose operating system</option>
-                                <option value="Windows 10">Windows 10</option>
-                                <option value="Windows 11">Windows 11</option>
-                                <option value="macOS">macOS</option>
-                                <option value="I am not sure">I’m not sure</option>
-                            </select>
-                        </div>
+                        <div className="label">Is the charger connected?</div>
+                        <select className="input" value={triageAnswers.chargerConnected || ""} onChange={(e) => updateTriage("chargerConnected", e.target.value)}>
+                            <option value="">Choose one</option>
+                            <option value="yes">Yes</option>
+                            <option value="no">No</option>
+                            <option value="not sure">Not sure</option>
+                        </select>
                     </div>
 
                     <div className="field">
-                        <div className="label">Anything else you know about the device</div>
+                        <div className="label">Can you see a charging light?</div>
+                        <select className="input" value={triageAnswers.chargingLight || ""} onChange={(e) => updateTriage("chargingLight", e.target.value)}>
+                            <option value="">Choose one</option>
+                            <option value="yes">Yes</option>
+                            <option value="no">No</option>
+                            <option value="not sure">Not sure</option>
+                        </select>
+                    </div>
+
+                    <div className="field">
+                        <div className="label">Have you already held the power button for 10 seconds?</div>
+                        <select className="input" value={triageAnswers.triedLongPress || ""} onChange={(e) => updateTriage("triedLongPress", e.target.value)}>
+                            <option value="">Choose one</option>
+                            <option value="yes">Yes</option>
+                            <option value="no">No</option>
+                        </select>
+                    </div>
+                </>
+            );
+        }
+
+        if (issueCategory === "eqnet") {
+            return (
+                <>
+                    <div className="field">
+                        <div className="label">Is Wi-Fi turned on?</div>
+                        <select className="input" value={triageAnswers.wifiDetected || ""} onChange={(e) => updateTriage("wifiDetected", e.target.value)}>
+                            <option value="">Choose one</option>
+                            <option value="yes">Yes</option>
+                            <option value="no">No</option>
+                            <option value="not sure">Not sure</option>
+                        </select>
+                    </div>
+
+                    <div className="field">
+                        <div className="label">Can you see EQNet in the Wi-Fi list?</div>
+                        <select className="input" value={triageAnswers.eqnetVisible || ""} onChange={(e) => updateTriage("eqnetVisible", e.target.value)}>
+                            <option value="">Choose one</option>
+                            <option value="yes">Yes</option>
+                            <option value="no">No</option>
+                            <option value="not sure">Not sure</option>
+                        </select>
+                    </div>
+
+                    <div className="field">
+                        <div className="label">What happens when you try to connect?</div>
+                        <select className="input" value={triageAnswers.eqnetConnects || ""} onChange={(e) => updateTriage("eqnetConnects", e.target.value)}>
+                            <option value="">Choose one</option>
+                            <option value="connects normally">Connects normally</option>
+                            <option value="asks again for login">Asks again for login</option>
+                            <option value="fails straight away">Fails straight away</option>
+                            <option value="does not appear">Does not appear</option>
+                        </select>
+                    </div>
+
+                    <div className="field">
+                        <div className="label">Does the internet work after connecting?</div>
+                        <select className="input" value={triageAnswers.internetWorks || ""} onChange={(e) => updateTriage("internetWorks", e.target.value)}>
+                            <option value="">Choose one</option>
+                            <option value="yes">Yes</option>
+                            <option value="no">No</option>
+                            <option value="sometimes">Sometimes</option>
+                        </select>
+                    </div>
+
+                    <div className="field">
+                        <div className="label">Are other students nearby having the same issue?</div>
+                        <select className="input" value={triageAnswers.othersAffected || ""} onChange={(e) => updateTriage("othersAffected", e.target.value)}>
+                            <option value="">Choose one</option>
+                            <option value="yes">Yes</option>
+                            <option value="no">No</option>
+                            <option value="not sure">Not sure</option>
+                        </select>
+                    </div>
+                </>
+            );
+        }
+
+        if (issueCategory === "byox") {
+            return (
+                <>
+                    <div className="field">
+                        <div className="label">Is Company Portal or BYOx already installed?</div>
+                        <select className="input" value={triageAnswers.byoxInstalled || ""} onChange={(e) => updateTriage("byoxInstalled", e.target.value)}>
+                            <option value="">Choose one</option>
+                            <option value="yes">Yes</option>
+                            <option value="no">No</option>
+                            <option value="not sure">Not sure</option>
+                        </select>
+                    </div>
+
+                    <div className="field">
+                        <div className="label">What is the closest issue?</div>
+                        <select className="input" value={triageAnswers.softwareIssueType || ""} onChange={(e) => updateTriage("softwareIssueType", e.target.value)}>
+                            <option value="">Choose one</option>
+                            <option value="download blocked">Download blocked</option>
+                            <option value="installer does not open">Installer does not open</option>
+                            <option value="cannot sign in">Cannot sign in</option>
+                            <option value="app installs but does not work">App installs but does not work</option>
+                            <option value="school software missing">School software missing</option>
+                        </select>
+                    </div>
+
+                    <div className="field">
+                        <div className="label">Have you already restarted the device?</div>
+                        <select className="input" value={triageAnswers.restartedDevice || ""} onChange={(e) => updateTriage("restartedDevice", e.target.value)}>
+                            <option value="">Choose one</option>
+                            <option value="yes">Yes</option>
+                            <option value="no">No</option>
+                        </select>
+                    </div>
+
+                    <div className="field">
+                        <div className="label">Error message or extra detail</div>
                         <textarea
                             className="textarea"
-                            value={device.notes}
-                            onChange={(e) => updateDevice("notes", e.target.value)}
-                            placeholder="Optional notes about the laptop, sticker details, or what you already know."
+                            value={triageAnswers.errorMessage || ""}
+                            onChange={(e) => updateTriage("errorMessage", e.target.value)}
+                            placeholder="For example: installer blocked, Microsoft Store closes, or sign-in is failing"
                         />
                     </div>
+                </>
+            );
+        }
 
-                    {deviceProfile && (
-                        <div className="previewBox">
-                            <div className="previewTitle">Rough laptop guide</div>
-                            <div className="small">
-                                {deviceProfile.normalisedMake || deviceProfile.normalisedModel ? (
-                                    <>
-                                        {deviceProfile.normalisedMake || ""}{" "}
-                                        {deviceProfile.normalisedModel || ""}
-                                        <br />
-                                    </>
-                                ) : null}
-                                {deviceProfile.estimatedAgeBand ? (
-                                    <>
-                                        Age band: {deviceProfile.estimatedAgeBand}
-                                        <br />
-                                    </>
-                                ) : null}
-                                {typeof deviceProfile.likelyWindows11Compatible === "boolean" ? (
-                                    <>
-                                        Windows 11 compatible:{" "}
-                                        {deviceProfile.likelyWindows11Compatible ? "Likely" : "Possibly not"}
-                                        <br />
-                                    </>
-                                ) : null}
-                                {deviceProfile.confidence ? (
-                                    <>
-                                        Confidence: {deviceProfile.confidence}
-                                        <br />
-                                    </>
-                                ) : null}
-                                {deviceProfile.notes?.length
-                                    ? deviceProfile.notes.map((note, i) => (
-                                        <span key={i}>
-                                            • {note}
-                                            <br />
-                                        </span>
-                                    ))
-                                    : null}
+        if (issueCategory === "general") {
+            return (
+                <>
+                    <div className="field">
+                        <div className="label">What is the problem?</div>
+                        <input className="input" value={triageAnswers.generalProblem || ""} onChange={(e) => updateTriage("generalProblem", e.target.value)} placeholder="Describe the issue" />
+                    </div>
+
+                    <div className="field">
+                        <div className="label">What are you trying to do?</div>
+                        <input className="input" value={triageAnswers.tryingToDo || ""} onChange={(e) => updateTriage("tryingToDo", e.target.value)} placeholder="For example: connect to Wi-Fi or install software" />
+                    </div>
+
+                    <div className="field">
+                        <div className="label">What happened instead?</div>
+                        <textarea className="textarea" value={triageAnswers.whatHappenedInstead || ""} onChange={(e) => updateTriage("whatHappenedInstead", e.target.value)} placeholder="Explain what went wrong" />
+                    </div>
+
+                    <div className="field">
+                        <div className="label">How urgent is it?</div>
+                        <select className="input" value={triageAnswers.urgency || ""} onChange={(e) => updateTriage("urgency", e.target.value)}>
+                            <option value="">Choose one</option>
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="high">High</option>
+                        </select>
+                    </div>
+                </>
+            );
+        }
+
+        return null;
+    }
+
+    function renderWizardShell(
+        title: string,
+        subtitle: string,
+        content: ReactNode,
+        options?: {
+            showBack?: boolean;
+            showContinue?: boolean;
+            continueLabel?: string;
+            onContinue?: () => void;
+            onBack?: () => void;
+            continueDisabled?: boolean;
+        }
+    ) {
+        return (
+            <>
+                <div className="wizardTopBar">
+                    <div className="wizardMiniBrand">
+                        <div className="brandMiniLogo">
+                            <Image
+                                src="/School_Logo.png"
+                                alt="School logo"
+                                width={28}
+                                height={28}
+                                style={{ objectFit: "contain" }}
+                                priority
+                            />
+                        </div>
+                        <div>
+                            <div className="brandMiniTitle">MSHS IT Help Desk</div>
+                            <div className="brandMiniSub">
+                                Step {wizardIndex + 1} of {WIZARD_ORDER.length}
                             </div>
                         </div>
-                    )}
+                    </div>
 
-                    <div className="actions">
-                        <button className="btnGhost" onClick={goBack}>
-                            Back
-                        </button>
-                        <button className="btnPrimary" onClick={handleDeviceNext} disabled={loading}>
-                            {loading ? "Checking..." : "Continue"}
-                        </button>
+                    <button className="btnGhost" onClick={resetWorkflow}>
+                        Start again
+                    </button>
+                </div>
+
+                <div className="wizardProgressCard">
+                    <div className="progressMeta">
+                        <span>Progress</span>
+                        <span>{wizardPercent}%</span>
+                    </div>
+                    <div className="progressBar">
+                        <div className="progressFill" style={{ width: `${wizardPercent}%` }} />
                     </div>
                 </div>
-            )}
 
-            {step === "issue" && (
-                <div className="card">
-                    <div className="sectionTitle">What do you need help with today?</div>
-                    <div className="small">
-                        Choose the option that sounds closest to the problem.
-                    </div>
+                <div className="wizardCard">
+                    <div className="wizardCardTitle">{title}</div>
+                    <div className="wizardCardSub">{subtitle}</div>
 
-                    <div className="choiceGrid">
-                        <button className="choiceBtn" onClick={() => handleIssueSelect("power")}>
-                            <div className="choiceBtnTitle">My laptop is not turning on</div>
-                            <div className="choiceBtnText">
-                                Power, charger, black screen, or startup problems.
-                            </div>
-                        </button>
+                    <div className="wizardBody">{content}</div>
 
-                        <button className="choiceBtn" onClick={() => handleIssueSelect("eqnet")}>
-                            <div className="choiceBtnTitle">Internet or EQNet is not working</div>
-                            <div className="choiceBtnText">
-                                Wi-Fi, EQNet visibility, connection, or browsing issues.
-                            </div>
-                        </button>
+                    {error ? <div className="errorBox">{error}</div> : null}
 
-                        <button className="choiceBtn" onClick={() => handleIssueSelect("byox")}>
-                            <div className="choiceBtnTitle">BYOx or school software is not working</div>
-                            <div className="choiceBtnText">
-                                Install issues, sign-in issues, missing apps, or Office problems.
-                            </div>
-                        </button>
+                    <div className="wizardActions">
+                        {options?.showBack ? (
+                            <button className="btnGhost" onClick={options.onBack ?? goBack}>
+                                Back
+                            </button>
+                        ) : (
+                            <span />
+                        )}
 
-                        <button className="choiceBtn" onClick={() => handleIssueSelect("general")}>
-                            <div className="choiceBtnTitle">Something else is wrong</div>
-                            <div className="choiceBtnText">
-                                Use this when the issue does not fit the main categories.
-                            </div>
-                        </button>
-                    </div>
-
-                    <div className="actions">
-                        <button className="btnGhost" onClick={goBack}>
-                            Back
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {step === "triage" && (
-                <div className="card">
-                    <div className="sectionTitle">Troubleshooting questions</div>
-                    <div className="small">
-                        Answer the questions below so the app can work out the most likely problem.
-                    </div>
-
-                    {issueCategory === "power" && (
-                        <>
-                            <div className="field">
-                                <div className="label">When you press the power button, what happens?</div>
-                                <select
-                                    className="input"
-                                    value={triageAnswers.powerStatus}
-                                    onChange={(e) => updateTriage("powerStatus", e.target.value)}
-                                >
-                                    <option value="">Choose one</option>
-                                    <option value="nothing">Nothing happens</option>
-                                    <option value="lights_or_fans">Lights or fans start</option>
-                                    <option value="screen_black">It turns on but the screen stays black</option>
-                                    <option value="not_sure">I’m not sure</option>
-                                </select>
-                            </div>
-
-                            <div className="field">
-                                <div className="label">Is the charger plugged in properly?</div>
-                                <select
-                                    className="input"
-                                    value={triageAnswers.chargerConnected}
-                                    onChange={(e) => updateTriage("chargerConnected", e.target.value)}
-                                >
-                                    <option value="">Choose one</option>
-                                    <option value="yes">Yes</option>
-                                    <option value="no">No</option>
-                                    <option value="not_sure">Not sure</option>
-                                </select>
-                            </div>
-
-                            <div className="field">
-                                <div className="label">Can you see a charging light?</div>
-                                <select
-                                    className="input"
-                                    value={triageAnswers.chargingLight}
-                                    onChange={(e) => updateTriage("chargingLight", e.target.value)}
-                                >
-                                    <option value="">Choose one</option>
-                                    <option value="yes">Yes</option>
-                                    <option value="no">No</option>
-                                    <option value="not_sure">Not sure</option>
-                                </select>
-                            </div>
-
-                            <div className="field">
-                                <div className="label">Have you held the power button for 10 seconds and tried again?</div>
-                                <select
-                                    className="input"
-                                    value={triageAnswers.triedLongPress}
-                                    onChange={(e) => updateTriage("triedLongPress", e.target.value)}
-                                >
-                                    <option value="">Choose one</option>
-                                    <option value="yes">Yes</option>
-                                    <option value="no">No</option>
-                                </select>
-                            </div>
-                        </>
-                    )}
-
-                    {issueCategory === "eqnet" && (
-                        <>
-                            <div className="field">
-                                <div className="label">Is Wi-Fi turned on?</div>
-                                <select
-                                    className="input"
-                                    value={triageAnswers.wifiDetected}
-                                    onChange={(e) => updateTriage("wifiDetected", e.target.value)}
-                                >
-                                    <option value="">Choose one</option>
-                                    <option value="yes">Yes</option>
-                                    <option value="no">No</option>
-                                    <option value="not_sure">Not sure</option>
-                                </select>
-                            </div>
-
-                            <div className="field">
-                                <div className="label">Can you see EQNet in the Wi-Fi list?</div>
-                                <select
-                                    className="input"
-                                    value={triageAnswers.eqnetVisible}
-                                    onChange={(e) => updateTriage("eqnetVisible", e.target.value)}
-                                >
-                                    <option value="">Choose one</option>
-                                    <option value="yes">Yes</option>
-                                    <option value="no">No</option>
-                                    <option value="not_sure">Not sure</option>
-                                </select>
-                            </div>
-
-                            <div className="field">
-                                <div className="label">Can you connect to EQNet successfully?</div>
-                                <select
-                                    className="input"
-                                    value={triageAnswers.eqnetConnects}
-                                    onChange={(e) => updateTriage("eqnetConnects", e.target.value)}
-                                >
-                                    <option value="">Choose one</option>
-                                    <option value="yes">Yes</option>
-                                    <option value="no">No</option>
-                                    <option value="keeps_asking">It keeps asking me again</option>
-                                    <option value="not_sure">Not sure</option>
-                                </select>
-                            </div>
-
-                            <div className="field">
-                                <div className="label">Do websites load once connected?</div>
-                                <select
-                                    className="input"
-                                    value={triageAnswers.internetWorks}
-                                    onChange={(e) => updateTriage("internetWorks", e.target.value)}
-                                >
-                                    <option value="">Choose one</option>
-                                    <option value="yes">Yes</option>
-                                    <option value="no">No</option>
-                                    <option value="sometimes">Sometimes</option>
-                                </select>
-                            </div>
-
-                            <div className="field">
-                                <div className="label">Are other students nearby having the same problem?</div>
-                                <select
-                                    className="input"
-                                    value={triageAnswers.othersAffected}
-                                    onChange={(e) => updateTriage("othersAffected", e.target.value)}
-                                >
-                                    <option value="">Choose one</option>
-                                    <option value="yes">Yes</option>
-                                    <option value="no">No</option>
-                                    <option value="not_sure">Not sure</option>
-                                </select>
-                            </div>
-                        </>
-                    )}
-
-                    {issueCategory === "byox" && (
-                        <>
-                            <div className="field">
-                                <div className="label">Is BYOx installed?</div>
-                                <select
-                                    className="input"
-                                    value={triageAnswers.byoxInstalled}
-                                    onChange={(e) => updateTriage("byoxInstalled", e.target.value)}
-                                >
-                                    <option value="">Choose one</option>
-                                    <option value="yes">Yes</option>
-                                    <option value="no">No</option>
-                                    <option value="not_sure">Not sure</option>
-                                </select>
-                            </div>
-
-                            <div className="field">
-                                <div className="label">Which issue sounds closest?</div>
-                                <select
-                                    className="input"
-                                    value={triageAnswers.softwareIssueType}
-                                    onChange={(e) => updateTriage("softwareIssueType", e.target.value)}
-                                >
-                                    <option value="">Choose one</option>
-                                    <option value="cannot_install_byox">I cannot install BYOx</option>
-                                    <option value="cannot_sign_in">I cannot sign in</option>
-                                    <option value="apps_missing">School apps are missing</option>
-                                    <option value="office_teams">Office / Teams is not working</option>
-                                    <option value="printing">Printing is not working</option>
-                                    <option value="other">Something else</option>
-                                </select>
-                            </div>
-
-                            <div className="field">
-                                <div className="label">Have you already restarted the laptop?</div>
-                                <select
-                                    className="input"
-                                    value={triageAnswers.restartedDevice}
-                                    onChange={(e) => updateTriage("restartedDevice", e.target.value)}
-                                >
-                                    <option value="">Choose one</option>
-                                    <option value="yes">Yes</option>
-                                    <option value="no">No</option>
-                                </select>
-                            </div>
-
-                            <div className="field">
-                                <div className="label">Error message or extra detail</div>
-                                <textarea
-                                    className="textarea"
-                                    value={triageAnswers.errorMessage}
-                                    onChange={(e) => updateTriage("errorMessage", e.target.value)}
-                                    placeholder="Type any error message or extra detail here."
-                                />
-                            </div>
-                        </>
-                    )}
-
-                    {issueCategory === "general" && (
-                        <>
-                            <div className="field">
-                                <div className="label">What is the problem?</div>
-                                <textarea
-                                    className="textarea"
-                                    value={triageAnswers.generalProblem}
-                                    onChange={(e) => updateTriage("generalProblem", e.target.value)}
-                                    placeholder="Describe what is going wrong."
-                                />
-                            </div>
-
-                            <div className="field">
-                                <div className="label">What were you trying to do?</div>
-                                <textarea
-                                    className="textarea"
-                                    value={triageAnswers.tryingToDo}
-                                    onChange={(e) => updateTriage("tryingToDo", e.target.value)}
-                                    placeholder="What were you trying to do when the problem happened?"
-                                />
-                            </div>
-
-                            <div className="field">
-                                <div className="label">What happened instead?</div>
-                                <textarea
-                                    className="textarea"
-                                    value={triageAnswers.whatHappenedInstead}
-                                    onChange={(e) => updateTriage("whatHappenedInstead", e.target.value)}
-                                    placeholder="What happened instead of what you expected?"
-                                />
-                            </div>
-
-                            <div className="field">
-                                <div className="label">How urgent is it?</div>
-                                <select
-                                    className="input"
-                                    value={triageAnswers.urgency}
-                                    onChange={(e) => updateTriage("urgency", e.target.value)}
-                                >
-                                    <option value="">Choose one</option>
-                                    <option value="can_keep_working">I can keep working</option>
-                                    <option value="need_help_today">I need help today</option>
-                                    <option value="cannot_do_classwork">I cannot do classwork</option>
-                                </select>
-                            </div>
-                        </>
-                    )}
-
-                    <div className="actions">
-                        <button className="btnGhost" onClick={goBack}>
-                            Back
-                        </button>
-                        <button className="btnPrimary" onClick={handleGenerateSummary} disabled={loading}>
-                            {loading ? "Generating..." : "Get AI help summary"}
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {step === "summary" && aiSummary && (
-                <div className="card">
-                    <div className="sectionTitle">Here’s what we think is happening</div>
-
-                    <div className="summaryGrid">
-                        <div className="summaryCard">
-                            <div className="summaryCardTitle">Likely issue</div>
-                            <div>{aiSummary.likelyIssue}</div>
-                        </div>
-
-                        <div className="summaryCard">
-                            <div className="summaryCardTitle">Student summary</div>
-                            <div>{aiSummary.studentSummary}</div>
-                        </div>
-
-                        <div className="summaryCard">
-                            <div className="summaryCardTitle">What to try next</div>
-                            <div className="small" style={{ fontSize: 14, color: "var(--text)" }}>
-                                {aiSummary.recommendedNextSteps.length ? (
-                                    aiSummary.recommendedNextSteps.map((item, index) => (
-                                        <div key={index} style={{ marginBottom: 8 }}>
-                                            • {item}
-                                        </div>
-                                    ))
-                                ) : (
-                                    <div>No steps returned yet.</div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="summaryCard">
-                            <div className="summaryCardTitle">Support level</div>
-                            <div>
-                                {aiSummary.escalationRecommended
-                                    ? "This may need staff help."
-                                    : "Try these steps first."}
-                            </div>
-                            <div className="small" style={{ marginTop: 8 }}>
-                                Confidence: {aiSummary.confidence}
-                            </div>
-                        </div>
-                    </div>
-
-                    <details className="previewBox">
-                        <summary className="previewTitle" style={{ cursor: "pointer" }}>
-                            Staff summary
-                        </summary>
-                        <div>{aiSummary.staffSummary}</div>
-                    </details>
-
-                    <div className="actions">
-                        <button className="btnGhost" onClick={goBack}>
-                            Back
-                        </button>
-                        <button className="btnPrimary" onClick={handleGenerateFixSteps} disabled={loading}>
-                            {loading ? "Building steps..." : "Show me the steps"}
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {step === "fix" && (
-                <div className="card">
-                    <div className="sectionTitle">Try these steps</div>
-                    <div className="small">
-                        Tick each step as you complete it.
-                    </div>
-
-                    {!fixSteps.length && (
-                        <div className="emptyState">
-                            <div className="emptyStateTitle">No fix steps yet</div>
-                            <div className="emptyStateText">
-                                The AI did not return fix steps yet. Go back and try again.
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="stepList">
-                        {fixSteps.map((item) => (
-                            <div
-                                key={item.stepNumber}
-                                className={`stepCard ${item.done ? "stepDone" : ""}`}
+                        {options?.showContinue ? (
+                            <button
+                                className="btnPrimary"
+                                onClick={options.onContinue ?? goNext}
+                                disabled={options?.continueDisabled}
                             >
-                                <div className="stepTop">
-                                    <div style={{ flex: 1 }}>
-                                        <div className="stepTitle">
-                                            Step {item.stepNumber}: {item.title}
-                                        </div>
-                                        <div className="stepText">{item.instruction}</div>
-                                        {item.whyThisHelps ? (
-                                            <div className="stepHelp">
-                                                Why this helps: {item.whyThisHelps}
-                                            </div>
-                                        ) : null}
+                                {options?.continueLabel ?? "Continue"}
+                            </button>
+                        ) : null}
+                    </div>
+                </div>
+            </>
+        );
+    }
+
+    function renderCurrentStepQuickPrompts() {
+        if (!currentStep) return null;
+
+        if (isPhysicalStep(currentStep)) {
+            return (
+                <div className="chatQuickPrompts">
+                    <button
+                        className="chatQuickBtn"
+                        onClick={() => void sendChatMessage("What do I physically do first?")}
+                    >
+                        What do I do first?
+                    </button>
+                    <button
+                        className="chatQuickBtn"
+                        onClick={() => void sendChatMessage("What should this look like on my device?")}
+                    >
+                        What does this look like?
+                    </button>
+                    <button
+                        className="chatQuickBtn"
+                        onClick={() => void sendChatMessage("What if this still does not work?")}
+                    >
+                        It still does not work
+                    </button>
+                </div>
+            );
+        }
+
+        return (
+            <div className="chatQuickPrompts">
+                <button
+                    className="chatQuickBtn"
+                    onClick={() => void sendChatMessage("What do I click first?")}
+                >
+                    What do I click first?
+                </button>
+                <button
+                    className="chatQuickBtn"
+                    onClick={() => void sendChatMessage("What does this look like on my screen?")}
+                >
+                    What does this look like?
+                </button>
+                <button
+                    className="chatQuickBtn"
+                    onClick={() => void sendChatMessage("What if I cannot find it?")}
+                >
+                    I cannot find it
+                </button>
+            </div>
+        );
+    }
+
+    function renderChatAssistant() {
+        return (
+            <>
+                {!isChatOpen ? (
+                    <div className="chatDock">
+                        <button
+                            className="helpFab"
+                            onClick={() => setIsChatOpen(true)}
+                            aria-label="Open AI assistant"
+                            title="Open AI assistant"
+                        >
+                            AI assistant
+                        </button>
+                    </div>
+                ) : null}
+
+                {isChatOpen ? (
+                    <div className="chatOverlay">
+                        <div className="chatOverlayPanel">
+                            <div className="chatOverlayHeader">
+                                <div>
+                                    <div className="sectionTitle" style={{ marginBottom: 0 }}>
+                                        IT support helper
+                                    </div>
+                                    <div className="small">
+                                        Ask what to do, what this step looks like, or what to try next.
                                     </div>
 
-                                    <div className="stepNumber">{item.stepNumber}</div>
+                                    {currentStep ? (
+                                        <div className="chatStepTag">
+                                            Step {currentStep.stepNumber}: {currentStep.title}
+                                        </div>
+                                    ) : (
+                                        <div className="chatStepTag">General help</div>
+                                    )}
                                 </div>
 
-                                <div className="actions" style={{ justifyContent: "flex-start" }}>
-                                    <button
-                                        className={item.done ? "btnPrimary" : "btnGhost"}
-                                        onClick={() => markStepDone(item.stepNumber)}
+                                <button className="chatIconBtn" onClick={() => setIsChatOpen(false)}>
+                                    Close
+                                </button>
+                            </div>
+
+                            <div className="chatOverlayBody" ref={chatMessagesRef}>
+                                {currentStep ? (
+                                    <div className="softBox" style={{ marginTop: 0 }}>
+                                        <div className="softBoxTitle">Current step</div>
+                                        <div className="stepText">{currentStep.instruction}</div>
+                                        {renderCurrentStepQuickPrompts()}
+                                    </div>
+                                ) : (
+                                    <div className="softBox" style={{ marginTop: 0 }}>
+                                        <div className="softBoxTitle">AI help</div>
+                                        <div className="stepText">
+                                            I can help with general IT questions. Once your troubleshoot steps are generated,
+                                            I can also explain the exact current step in simple language.
+                                        </div>
+
+                                        <div className="chatQuickPrompts">
+                                            <button
+                                                className="chatQuickBtn"
+                                                onClick={() => void sendChatMessage("My laptop is not turning on. What should I check first?")}
+                                            >
+                                                Laptop not turning on
+                                            </button>
+                                            <button
+                                                className="chatQuickBtn"
+                                                onClick={() => void sendChatMessage("EQNet is not working. What should I try first?")}
+                                            >
+                                                EQNet not working
+                                            </button>
+                                            <button
+                                                className="chatQuickBtn"
+                                                onClick={() => void sendChatMessage("BYOx is not working. What should I try first?")}
+                                            >
+                                                BYOx not working
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {chatMessages.map((message, index) => (
+                                    <div
+                                        key={index}
+                                        className={`chatBubble ${message.role === "assistant" ? "chatAssistant" : "chatUser"}`}
                                     >
-                                        {item.done ? "Done" : "Mark as done"}
+                                        {message.text}
+                                    </div>
+                                ))}
+
+                                {chatLoading ? <div className="chatBubble chatAssistant">Thinking...</div> : null}
+                            </div>
+
+                            <div className="chatOverlayFooter">
+                                <input
+                                    className="input"
+                                    value={chatInput}
+                                    onChange={(e) => setChatInput(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                            e.preventDefault();
+                                            void sendChatMessage();
+                                        }
+                                    }}
+                                    placeholder="Ask for help with this step..."
+                                />
+                                <button className="btnPrimary" onClick={() => void sendChatMessage()}>
+                                    Send
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                ) : null}
+            </>
+        );
+    }
+
+    if (wizardStep === "landing") {
+        return (
+            <>
+                <div className="landingPageWrap">
+                    <div className="landingPageInner">
+                        <Image
+                            src="/School_Logo.png"
+                            alt="Maroochydore State High School logo"
+                            width={120}
+                            height={120}
+                            style={{ objectFit: "contain" }}
+                            priority
+                        />
+
+                        <h1 className="landingMainTitle">MSHS IT Help Desk</h1>
+                        <p className="landingMainSub">Student device support, step by step.</p>
+
+                        <div className="landingIntroCard">
+                            <p className="landingIntroText">
+                                Get help with your laptop, EQNet, BYOx, school software, or a general IT issue.
+                            </p>
+
+                            <button className="landingPrimaryButton" onClick={() => setWizardStep("student")}>
+                                Start IT Help
+                            </button>
+
+                            <div className="landingSupportBox">
+                                <div className="landingSupportTitle">This can help with</div>
+                                <ul className="landingSupportList">
+                                    <li>Laptop not turning on</li>
+                                    <li>EQNet or internet not working</li>
+                                    <li>BYOx or school software issues</li>
+                                    <li>General device problems</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {renderChatAssistant()}
+            </>
+        );
+    }
+
+    if (wizardStep === "student") {
+        return (
+            <>
+                <div className="wizardPageWrap">
+                    {renderWizardShell(
+                        "Let’s get your IT help request started",
+                        "Enter your student details first so the session can be tracked properly.",
+                        <>
+                            <div className="field">
+                                <div className="label">Student MSID</div>
+                                <input
+                                    className="input"
+                                    value={student.msid}
+                                    onChange={(e) => updateStudent("msid", e.target.value)}
+                                    placeholder="e.g. 12345678"
+                                />
+                            </div>
+
+                            <div className="field">
+                                <div className="label">Year level</div>
+                                <select
+                                    className="input"
+                                    value={student.yearLevel}
+                                    onChange={(e) => updateStudent("yearLevel", e.target.value)}
+                                >
+                                    <option value="">Choose year level</option>
+                                    <option value="7">Year 7</option>
+                                    <option value="8">Year 8</option>
+                                    <option value="9">Year 9</option>
+                                    <option value="10">Year 10</option>
+                                    <option value="11">Year 11</option>
+                                    <option value="12">Year 12</option>
+                                </select>
+                            </div>
+
+                            <div className="field">
+                                <div className="label">Device type</div>
+                                <div className="wizardChoiceGrid">
+                                    <button
+                                        type="button"
+                                        className={`wizardChoiceLarge ${student.deviceOwnership === "BYOD" ? "wizardChoiceLargeOn" : ""}`}
+                                        onClick={() => updateStudent("deviceOwnership", "BYOD")}
+                                    >
+                                        BYOx device
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        className={`wizardChoiceLarge ${student.deviceOwnership === "School device" ? "wizardChoiceLargeOn" : ""}`}
+                                        onClick={() => updateStudent("deviceOwnership", "School device")}
+                                    >
+                                        School-managed device
                                     </button>
                                 </div>
                             </div>
-                        ))}
-                    </div>
-
-                    <div className="infoPanel">
-                        <div className="infoPanelTitle">Progress</div>
-                        <div>
-                            {completedFixCount} of {fixSteps.length} steps completed
-                        </div>
-                    </div>
-
-                    <div className="actions">
-                        <button className="btnGhost" onClick={goBack}>
-                            Back
-                        </button>
-                        <button className="btnPrimary" onClick={() => setStep("resolution")}>
-                            Check if it works now
-                        </button>
-                    </div>
+                        </>,
+                        {
+                            showBack: true,
+                            showContinue: true,
+                            continueLabel: "Continue",
+                            onBack: goBack,
+                            onContinue: goNext,
+                            continueDisabled: !canContinueFromStudent(),
+                        }
+                    )}
                 </div>
-            )}
+                {renderChatAssistant()}
+            </>
+        );
+    }
 
-            {step === "resolution" && (
-                <div className="card">
-                    <div className="sectionTitle">Did that fix the problem?</div>
+    if (wizardStep === "device") {
+        return (
+            <>
+                <div className="wizardPageWrap">
+                    {renderWizardShell(
+                        "Tell us about your laptop",
+                        "Add what you know. If you are not sure, leave it blank and keep going.",
+                        <>
+                            <div className="wizardTwoCol">
+                                <div className="field">
+                                    <div className="label">Make</div>
+                                    <input
+                                        className="input"
+                                        value={device.make}
+                                        onChange={(e) => updateDevice("make", e.target.value)}
+                                        placeholder="Lenovo, HP, Dell..."
+                                    />
+                                </div>
 
-                    <div className="choiceGrid">
-                        <button className="choiceBtn" onClick={() => handleResolution("full")}>
-                            <div className="choiceBtnTitle">Yes, it’s working now</div>
-                            <div className="choiceBtnText">
-                                The device is working again and I can continue.
+                                <div className="field">
+                                    <div className="label">Model</div>
+                                    <input
+                                        className="input"
+                                        value={device.model}
+                                        onChange={(e) => updateDevice("model", e.target.value)}
+                                        placeholder="ThinkPad, ProBook..."
+                                    />
+                                </div>
                             </div>
-                        </button>
 
-                        <button className="choiceBtn" onClick={() => handleResolution("partial")}>
-                            <div className="choiceBtnTitle">Partly</div>
-                            <div className="choiceBtnText">
-                                Some parts are working, but I still need more help.
+                            <div className="wizardTwoCol">
+                                <div className="field">
+                                    <div className="label">Approximate year</div>
+                                    <input
+                                        className="input"
+                                        value={device.year}
+                                        onChange={(e) => updateDevice("year", e.target.value)}
+                                        placeholder="2020"
+                                    />
+                                </div>
+
+                                <div className="field">
+                                    <div className="label">Operating system</div>
+                                    <select
+                                        className="input"
+                                        value={device.os}
+                                        onChange={(e) => updateDevice("os", e.target.value)}
+                                    >
+                                        <option value="">Choose operating system</option>
+                                        <option value="Windows">Windows</option>
+                                        <option value="Mac">Mac</option>
+                                        <option value="Not sure">Not sure</option>
+                                    </select>
+                                </div>
                             </div>
-                        </button>
 
-                        <button className="choiceBtn" onClick={() => handleResolution("none")}>
-                            <div className="choiceBtnTitle">No, I still need help</div>
-                            <div className="choiceBtnText">
-                                The issue is still there and needs follow-up.
+                            <div className="field">
+                                <div className="label">Anything else you know about the device</div>
+                                <textarea
+                                    className="textarea"
+                                    value={device.notes}
+                                    onChange={(e) => updateDevice("notes", e.target.value)}
+                                    placeholder="Optional notes about the laptop, sticker details, or what you already know."
+                                />
                             </div>
-                        </button>
-                    </div>
-
-                    <div className="field">
-                        <div className="label">Anything else we should know?</div>
-                        <textarea
-                            className="textarea"
-                            value={extraNotes}
-                            onChange={(e) => setExtraNotes(e.target.value)}
-                            placeholder="Optional extra notes"
-                        />
-                    </div>
-
-                    <div className="field">
-                        <div className="label">Where are you right now?</div>
-                        <input
-                            className="input"
-                            value={location}
-                            onChange={(e) => setLocation(e.target.value)}
-                            placeholder="Optional location"
-                        />
-                    </div>
-
-                    <div className="actions">
-                        <button className="btnGhost" onClick={goBack}>
-                            Back
-                        </button>
-                    </div>
+                        </>,
+                        {
+                            showBack: true,
+                            showContinue: true,
+                            continueLabel: "Continue",
+                            onBack: goBack,
+                            onContinue: goNext,
+                            continueDisabled: !canContinueFromDevice(),
+                        }
+                    )}
                 </div>
-            )}
+                {renderChatAssistant()}
+            </>
+        );
+    }
 
-            {step === "complete" && (
-                <div className="card">
-                    <div className="sectionTitle">Your IT help session has been saved</div>
+    if (wizardStep === "issue") {
+        return (
+            <>
+                <div className="wizardPageWrap">
+                    {renderWizardShell(
+                        "What do you need help with today?",
+                        "Choose the option that sounds closest to the problem.",
+                        <div className="wizardIssueGrid">
+                            {ISSUE_OPTIONS.map((option) => (
+                                <button
+                                    key={option.key}
+                                    type="button"
+                                    className={`wizardIssueCard ${issueCategory === option.key ? "wizardIssueCardOn" : ""}`}
+                                    onClick={() => setIssueCategory(option.key)}
+                                >
+                                    <div className="wizardIssueTitle">{option.title}</div>
+                                    <div className="wizardIssueText">{option.text}</div>
+                                </button>
+                            ))}
+                        </div>,
+                        {
+                            showBack: true,
+                            showContinue: true,
+                            continueLabel: "Continue",
+                            onBack: goBack,
+                            onContinue: goNext,
+                            continueDisabled: !canContinueFromIssue(),
+                        }
+                    )}
+                </div>
+                {renderChatAssistant()}
+            </>
+        );
+    }
 
-                    <div className="summaryGrid">
-                        <div className="summaryCard">
-                            <div className="summaryCardTitle">Outcome</div>
-                            <div>
-                                {resolutionLevel === "full" && "The issue looks resolved."}
-                                {resolutionLevel === "partial" &&
-                                    "The issue is partly resolved and may still need follow-up."}
-                                {resolutionLevel === "none" && "The issue still needs support."}
+    if (wizardStep === "triage") {
+        return (
+            <>
+                <div className="wizardPageWrap">
+                    {renderWizardShell(
+                        "A few quick questions",
+                        "These help narrow down the issue before we generate the troubleshooting steps.",
+                        renderTriageFields(),
+                        {
+                            showBack: true,
+                            showContinue: true,
+                            continueLabel: loadingSummary || loadingFixSteps ? "Generating..." : "Generate help steps",
+                            onBack: goBack,
+                            onContinue: goNext,
+                            continueDisabled: loadingSummary || loadingFixSteps || !canContinueFromTriage(),
+                        }
+                    )}
+                </div>
+                {renderChatAssistant()}
+            </>
+        );
+    }
+
+    if (wizardStep === "summary") {
+        return (
+            <>
+                <div className="wizardPageWrap">
+                    {renderWizardShell(
+                        "Here is the issue summary",
+                        "This gives the student a quick explanation before moving into the actual troubleshooting steps.",
+                        !aiSummary ? (
+                            <div className="emptyState">
+                                <div className="emptyStateTitle">No summary yet</div>
+                                <div className="emptyStateText">Generate the troubleshooting steps first.</div>
                             </div>
-                        </div>
+                        ) : (
+                            <div className="summaryGrid">
+                                <div className="summaryCard">
+                                    <div className="summaryCardTitle">Likely issue</div>
+                                    <div className="stepText">{aiSummary.likelyIssue}</div>
+                                    <div className="inlineMeta">
+                                        <span className={`statusBadge ${statusClass(aiSummary.escalationRecommended)}`}>
+                                            {confidenceLabel(aiSummary.confidence)}
+                                        </span>
+                                        <span className={`statusBadge ${statusClass(aiSummary.escalationRecommended)}`}>
+                                            {aiSummary.escalationRecommended ? "May need staff support" : "Student can try safe steps first"}
+                                        </span>
+                                    </div>
+                                </div>
 
-                        <div className="summaryCard">
-                            <div className="summaryCardTitle">Session details</div>
-                            <div className="kvList">
-                                <div className="kvRow">
-                                    <div className="kvKey">Session ID</div>
-                                    <div className="kvValue">{sessionId || "Not set"}</div>
+                                <div className="summaryCard">
+                                    <div className="summaryCardTitle">Student summary</div>
+                                    <div className="stepText">{aiSummary.studentSummary}</div>
                                 </div>
-                                <div className="kvRow">
-                                    <div className="kvKey">MSID</div>
-                                    <div className="kvValue">{student.msid}</div>
+
+                                <div className="summaryCard">
+                                    <div className="summaryCardTitle">Recommended next checks</div>
+                                    <div className="kvList">
+                                        {aiSummary.recommendedNextSteps.map((item, index) => (
+                                            <div key={index} className="kvRow">
+                                                <div className="kvKey">Check {index + 1}</div>
+                                                <div className="kvValue">{item}</div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
-                                <div className="kvRow">
-                                    <div className="kvKey">Issue type</div>
-                                    <div className="kvValue">{issueCategory || "Not set"}</div>
-                                </div>
-                                {aiSummary?.likelyIssue ? (
-                                    <div className="kvRow">
-                                        <div className="kvKey">Likely issue</div>
-                                        <div className="kvValue">{aiSummary.likelyIssue}</div>
-                                    </div>
-                                ) : null}
-                                {location ? (
-                                    <div className="kvRow">
-                                        <div className="kvKey">Location</div>
-                                        <div className="kvValue">{location}</div>
-                                    </div>
-                                ) : null}
-                                {extraNotes ? (
-                                    <div className="kvRow">
-                                        <div className="kvKey">Extra notes</div>
-                                        <div className="kvValue">{extraNotes}</div>
-                                    </div>
-                                ) : null}
                             </div>
-                        </div>
+                        ),
+                        {
+                            showBack: true,
+                            showContinue: true,
+                            continueLabel: "Show troubleshoot steps",
+                            onBack: goBack,
+                            onContinue: goNext,
+                        }
+                    )}
+                </div>
+                {renderChatAssistant()}
+            </>
+        );
+    }
 
-                        {resolutionLevel !== "full" && (
-                            <div className="summaryCard">
-                                <div className="summaryCardTitle">Next step</div>
+    if (wizardStep === "steps" || wizardStep === "complete") {
+        return (
+            <>
+                <div className="wizardPageWrap">
+                    <>
+                        <div className="wizardTopBar">
+                            <div className="wizardMiniBrand">
+                                <div className="brandMiniLogo">
+                                    <Image
+                                        src="/School_Logo.png"
+                                        alt="School logo"
+                                        width={28}
+                                        height={28}
+                                        style={{ objectFit: "contain" }}
+                                        priority
+                                    />
+                                </div>
                                 <div>
-                                    This is the point where we would submit the issue to staff or save it to SharePoint.
+                                    <div className="brandMiniTitle">MSHS IT Help Desk</div>
+                                    <div className="brandMiniSub">
+                                        {wizardStep === "complete" ? "Completed" : `Step ${wizardIndex + 1} of ${WIZARD_ORDER.length}`}
+                                    </div>
                                 </div>
                             </div>
-                        )}
-                    </div>
 
-                    <div className="actions">
-                        <button className="btnGhost" onClick={resetAll}>
-                            Start a new request
-                        </button>
-                    </div>
+                            <button className="btnGhost" onClick={resetWorkflow}>
+                                Start again
+                            </button>
+                        </div>
+
+                        <div className="wizardProgressCard">
+                            <div className="progressMeta">
+                                <span>Progress</span>
+                                <span>{wizardStep === "complete" ? "100%" : `${wizardPercent}%`}</span>
+                            </div>
+                            <div className="progressBar">
+                                <div
+                                    className="progressFill"
+                                    style={{ width: wizardStep === "complete" ? "100%" : `${wizardPercent}%` }}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="wizardCard">
+                            <div className="wizardCardTitle">
+                                {wizardStep === "complete" ? "Nice work" : "Try these troubleshoot steps"}
+                            </div>
+                            <div className="wizardCardSub">
+                                {wizardStep === "complete"
+                                    ? "You can review the steps again, or start a new IT help request."
+                                    : "If a step says how to fix the problem, students can open it and see what it looks like."}
+                            </div>
+
+                            {wizardStep !== "complete" ? (
+                                <>
+                                    <div className="progressWrap">
+                                        <div className="progressMeta">
+                                            <span>
+                                                {completedSteps.length} of {fixSteps.length} steps completed
+                                            </span>
+                                            <span>{fixCompletionPercent}%</span>
+                                        </div>
+                                        <div className="progressBar">
+                                            <div className="progressFill" style={{ width: `${fixCompletionPercent}%` }} />
+                                        </div>
+                                    </div>
+
+                                    <div className="stepList">
+                                        {fixSteps.map((step, index) => {
+                                            const isDone = completedSteps.includes(step.stepNumber);
+                                            const isExplainOpen = openExplainIndex === index;
+                                            const isActive = activeStepIndex === index;
+
+                                            return (
+                                                <div
+                                                    key={step.stepNumber}
+                                                    className={`stepCard ${isDone ? "stepDone" : ""}`}
+                                                    style={{ borderColor: isActive ? "var(--brandLine)" : undefined }}
+                                                >
+                                                    <div className="stepTop">
+                                                        <div>
+                                                            <div className="stepTitle">
+                                                                Step {step.stepNumber}: {step.title}
+                                                            </div>
+                                                            <div className="stepText">{step.instruction}</div>
+                                                            {step.whyThisHelps ? (
+                                                                <div className="stepHelp">Why this helps: {step.whyThisHelps}</div>
+                                                            ) : null}
+                                                        </div>
+
+                                                        <div className="stepNumber">{step.stepNumber}</div>
+                                                    </div>
+
+                                                    <div className="stepActionRow">
+                                                        <button
+                                                            className="btnGhost"
+                                                            onClick={() => {
+                                                                setActiveStepIndex(index);
+                                                                markStepDone(step.stepNumber);
+                                                            }}
+                                                        >
+                                                            Mark as done
+                                                        </button>
+
+                                                        <button
+                                                            className="btnSecondarySoft"
+                                                            onClick={() => {
+                                                                setActiveStepIndex(index);
+                                                                setOpenExplainIndex(isExplainOpen ? null : index);
+                                                            }}
+                                                        >
+                                                            {isExplainOpen ? "Hide help" : "What does this look like?"}
+                                                        </button>
+
+                                                        <button
+                                                            className="btnGhost"
+                                                            onClick={() => {
+                                                                setActiveStepIndex(index);
+                                                                setIsChatOpen(true);
+                                                            }}
+                                                        >
+                                                            Ask AI assistant
+                                                        </button>
+                                                    </div>
+
+                                                    {isExplainOpen ? (
+                                                        <div className="stepExplainBox">
+                                                            <div className="stepExplainTitle">How to do this</div>
+                                                            <div className="stepText">{step.howToDoThis}</div>
+
+                                                            <div className="stepExplainTitle" style={{ marginTop: 10 }}>
+                                                                Common problem
+                                                            </div>
+                                                            <div className="stepHelp">{step.commonProblem}</div>
+                                                        </div>
+                                                    ) : null}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="summaryCard">
+                                    <div className="summaryCardTitle">Support finished</div>
+                                    <div className="stepText">
+                                        The student has reached the end of the guided troubleshoot steps.
+                                    </div>
+                                </div>
+                            )}
+
+                            {error ? <div className="errorBox">{error}</div> : null}
+
+                            <div className="wizardActions">
+                                <button className="btnGhost" onClick={goBack}>
+                                    Back
+                                </button>
+
+                                {wizardStep === "steps" ? (
+                                    <button className="btnPrimary" onClick={goNext}>
+                                        Check if it works now
+                                    </button>
+                                ) : (
+                                    <button className="btnPrimary" onClick={resetWorkflow}>
+                                        Start a new help request
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </>
                 </div>
-            )}
-        </div>
-    );
+                {renderChatAssistant()}
+            </>
+        );
+    }
+
+    return null;
 }
