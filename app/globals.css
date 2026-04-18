@@ -993,4 +993,905 @@ select.input {
     .helpFab {
         padding: 13px 16px;
     }
+    /* ---------- theme ---------- */
+    :root {
+        --bg: #f5f7fb;
+        --bgSoft: #eef3f9;
+        --card: #ffffff;
+        --cardSoft: #f9fbfd;
+        --text: #152033;
+        --muted: #64748b;
+        --mutedDark: #475569;
+        --line: #dde5ef;
+        --lineStrong: #c9d6e5;
+        --brand: #1f2a44;
+        --brand2: #243252;
+        --brandSoft: #edf2fa;
+        --brandLine: #bfcee5;
+        --accent: #f2a900;
+        --accentSoft: #fff7df;
+        --accentLine: #f4d785;
+        --successSoft: #eef9f1;
+        --successLine: #bfe2c7;
+        --warnSoft: #fff7e7;
+        --warnLine: #f4d38b;
+        --shadowXs: 0 2px 6px rgba(15, 23, 42, 0.04);
+        --shadowSm: 0 8px 20px rgba(15, 23, 42, 0.06);
+        --shadowMd: 0 16px 38px rgba(15, 23, 42, 0.10);
+        --shadowLg: 0 28px 70px rgba(15, 23, 42, 0.18);
+        --radiusXs: 10px;
+        --radiusSm: 14px;
+        --radiusMd: 18px;
+        --radiusLg: 24px;
+        --maxWidth: 1120px;
+    }
+
+    /* ---------- base ---------- */
+    * {
+        box-sizing: border-box;
+    }
+
+    html,
+    body {
+        padding: 0;
+        margin: 0;
+        min-height: 100%;
+        font-family: Arial, Helvetica, sans-serif;
+        color: var(--text);
+        background: radial-gradient(circle at top left, #f8fbff 0%, #f5f7fb 42%, #eef3f9 100%);
+    }
+
+    body {
+        line-height: 1.45;
+    }
+
+    a {
+        color: inherit;
+        text-decoration: none;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+        font: inherit;
+    }
+
+    button {
+        cursor: pointer;
+    }
+
+    input,
+    select,
+    textarea {
+        width: 100%;
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--text);
+        border-radius: 14px;
+        padding: 14px 15px;
+        outline: none;
+        transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+    }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            border-color: var(--brandLine);
+            box-shadow: 0 0 0 4px rgba(31, 42, 68, 0.08);
+        }
+
+    textarea {
+        min-height: 110px;
+        resize: vertical;
+    }
+
+    ::placeholder {
+        color: #8b98ab;
+    }
+
+    /* ---------- layout ---------- */
+    .landingPageWrap,
+    .wizardPageWrap {
+        min-height: 100vh;
+        padding: 28px 18px 48px;
+    }
+
+        .landingPageInner,
+        .wizardPageWrap > * {
+            width: 100%;
+            max-width: var(--maxWidth);
+            margin: 0 auto;
+        }
+
+    /* ---------- landing ---------- */
+    .landingPageInner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        text-align: center;
+        min-height: calc(100vh - 76px);
+    }
+
+    .landingMainTitle {
+        margin: 0;
+        font-size: clamp(2rem, 3vw, 3rem);
+        line-height: 1.05;
+        letter-spacing: -0.02em;
+        color: var(--brand);
+    }
+
+    .landingMainSub {
+        margin: 0;
+        color: var(--mutedDark);
+        font-size: 1.06rem;
+    }
+
+    .landingIntroCard {
+        width: min(100%, 740px);
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid var(--line);
+        border-radius: var(--radiusLg);
+        box-shadow: var(--shadowMd);
+        padding: 28px;
+        backdrop-filter: blur(8px);
+    }
+
+    .landingIntroText {
+        margin: 0 0 20px;
+        font-size: 1rem;
+        color: var(--text);
+    }
+
+    .landingPrimaryButton {
+        border: none;
+        border-radius: 16px;
+        background: linear-gradient(180deg, var(--brand2), var(--brand));
+        color: #fff;
+        padding: 15px 22px;
+        font-weight: 700;
+        min-width: 200px;
+        box-shadow: var(--shadowSm);
+        transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+    }
+
+        .landingPrimaryButton:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadowMd);
+        }
+
+        .landingPrimaryButton:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+    .landingSupportBox {
+        margin-top: 22px;
+        background: var(--brandSoft);
+        border: 1px solid var(--brandLine);
+        border-radius: 18px;
+        padding: 18px 18px 14px;
+        text-align: left;
+    }
+
+    .landingSupportTitle {
+        font-weight: 700;
+        color: var(--brand);
+        margin-bottom: 10px;
+    }
+
+    .landingSupportList {
+        margin: 0;
+        padding-left: 18px;
+        color: var(--mutedDark);
+    }
+
+        .landingSupportList li + li {
+            margin-top: 6px;
+        }
+
+    /* ---------- top bars / shell ---------- */
+    .wizardTopBar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 18px;
+    }
+
+    .wizardMiniBrand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .brandMiniLogo {
+        width: 46px;
+        height: 46px;
+        border-radius: 14px;
+        background: #fff;
+        border: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: var(--shadowXs);
+    }
+
+    .brandMiniTitle {
+        font-size: 1rem;
+        font-weight: 800;
+        color: var(--brand);
+        letter-spacing: -0.01em;
+    }
+
+    .brandMiniSub {
+        font-size: 0.92rem;
+        color: var(--muted);
+    }
+
+    .wizardProgressCard {
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: var(--shadowSm);
+        padding: 16px 18px;
+        margin-bottom: 18px;
+    }
+
+    .wizardCard {
+        background: rgba(255, 255, 255, 0.97);
+        border: 1px solid var(--line);
+        border-radius: var(--radiusLg);
+        box-shadow: var(--shadowMd);
+        padding: 28px;
+        backdrop-filter: blur(10px);
+    }
+
+    .wizardCardTitle {
+        font-size: clamp(1.35rem, 2vw, 1.75rem);
+        font-weight: 800;
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+        color: var(--brand);
+        margin-bottom: 8px;
+    }
+
+    .wizardCardSub {
+        color: var(--mutedDark);
+        margin-bottom: 24px;
+        max-width: 760px;
+    }
+
+    .wizardBody {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+    }
+
+    .wizardActions {
+        margin-top: 26px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    /* ---------- fields ---------- */
+    .field {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .label {
+        font-weight: 700;
+        color: var(--brand);
+        font-size: 0.95rem;
+    }
+
+    .input,
+    .textarea {
+        background: #fff;
+    }
+
+    .wizardTwoCol {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+    }
+
+    /* ---------- choices ---------- */
+    .wizardChoiceGrid,
+    .wizardIssueGrid {
+        display: grid;
+        gap: 16px;
+    }
+
+    .wizardChoiceGrid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .wizardIssueGrid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .wizardChoiceLarge,
+    .wizardIssueCard {
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: linear-gradient(180deg, #ffffff, #fbfcfe);
+        box-shadow: var(--shadowXs);
+        text-align: left;
+        transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+    }
+
+    .wizardChoiceLarge {
+        padding: 18px 18px;
+        font-weight: 700;
+        color: var(--text);
+    }
+
+    .wizardIssueCard {
+        padding: 20px;
+    }
+
+        .wizardChoiceLarge:hover,
+        .wizardIssueCard:hover {
+            transform: translateY(-1px);
+            border-color: var(--brandLine);
+            box-shadow: var(--shadowSm);
+        }
+
+    .wizardChoiceLargeOn,
+    .wizardIssueCardOn {
+        border-color: var(--brandLine);
+        background: linear-gradient(180deg, #fdfefe, var(--brandSoft));
+        box-shadow: 0 10px 24px rgba(31, 42, 68, 0.10);
+    }
+
+    .wizardIssueTitle {
+        font-weight: 800;
+        color: var(--brand);
+        margin-bottom: 6px;
+    }
+
+    .wizardIssueText {
+        color: var(--mutedDark);
+        font-size: 0.95rem;
+    }
+
+    /* ---------- buttons ---------- */
+    .btnPrimary,
+    .btnGhost,
+    .btnSecondarySoft,
+    .chatIconBtn,
+    .helpFab {
+        border: none;
+        transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease, background 0.16s ease;
+    }
+
+    .btnPrimary {
+        background: linear-gradient(180deg, var(--brand2), var(--brand));
+        color: #fff;
+        padding: 13px 18px;
+        border-radius: 14px;
+        font-weight: 700;
+        box-shadow: var(--shadowSm);
+    }
+
+        .btnPrimary:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadowMd);
+        }
+
+        .btnPrimary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: var(--shadowXs);
+        }
+
+    .btnGhost {
+        background: #fff;
+        color: var(--brand);
+        border: 1px solid var(--line);
+        padding: 12px 16px;
+        border-radius: 14px;
+        font-weight: 700;
+        box-shadow: var(--shadowXs);
+    }
+
+        .btnGhost:hover {
+            background: #f9fbfe;
+            border-color: var(--brandLine);
+        }
+
+    .btnSecondarySoft {
+        background: var(--accentSoft);
+        color: #7b5600;
+        border: 1px solid var(--accentLine);
+        padding: 12px 16px;
+        border-radius: 14px;
+        font-weight: 700;
+        box-shadow: var(--shadowXs);
+    }
+
+        .btnSecondarySoft:hover {
+            background: #fff2c4;
+        }
+
+    /* ---------- progress ---------- */
+    .progressWrap {
+        margin-bottom: 22px;
+    }
+
+    .progressMeta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        margin-bottom: 8px;
+        color: var(--mutedDark);
+        font-size: 0.92rem;
+        font-weight: 700;
+    }
+
+    .progressBar {
+        width: 100%;
+        height: 12px;
+        border-radius: 999px;
+        background: #e9eef5;
+        overflow: hidden;
+    }
+
+    .progressFill {
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, var(--accent), #ffd468);
+        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+    }
+
+    /* ---------- summaries ---------- */
+    .summaryGrid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+    }
+
+    .summaryCard,
+    .softBox,
+    .emptyState,
+    .stepExplainBox {
+        background: linear-gradient(180deg, #ffffff, #fbfcfe);
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        box-shadow: var(--shadowXs);
+        padding: 18px;
+    }
+
+    .summaryCardTitle,
+    .softBoxTitle,
+    .emptyStateTitle,
+    .stepExplainTitle,
+    .sectionTitle {
+        font-weight: 800;
+        color: var(--brand);
+        letter-spacing: -0.01em;
+    }
+
+    .summaryCardTitle,
+    .softBoxTitle,
+    .emptyStateTitle,
+    .stepExplainTitle {
+        margin-bottom: 10px;
+    }
+
+    .emptyState {
+        text-align: center;
+        padding: 30px 18px;
+    }
+
+    .emptyStateText,
+    .small {
+        color: var(--muted);
+        font-size: 0.94rem;
+    }
+
+    .inlineMeta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+    }
+
+    .statusBadge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        padding: 8px 12px;
+        font-size: 0.84rem;
+        font-weight: 800;
+        border: 1px solid transparent;
+    }
+
+        .statusBadge.success {
+            background: var(--successSoft);
+            border-color: var(--successLine);
+            color: #26653a;
+        }
+
+        .statusBadge.warn {
+            background: var(--warnSoft);
+            border-color: var(--warnLine);
+            color: #8a5d00;
+        }
+
+    .kvList {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .kvRow {
+        display: grid;
+        grid-template-columns: 88px 1fr;
+        gap: 12px;
+        align-items: start;
+    }
+
+    .kvKey {
+        font-size: 0.84rem;
+        font-weight: 800;
+        color: var(--brand);
+        background: var(--brandSoft);
+        border: 1px solid var(--brandLine);
+        border-radius: 999px;
+        padding: 7px 10px;
+        text-align: center;
+    }
+
+    .kvValue {
+        color: var(--text);
+    }
+
+    /* ---------- step cards ---------- */
+    .stepList {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .stepCard {
+        background: linear-gradient(180deg, #ffffff, #fbfcfe);
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        box-shadow: var(--shadowSm);
+        padding: 20px;
+        transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+    }
+
+        .stepCard:hover {
+            box-shadow: var(--shadowMd);
+        }
+
+    .stepDone {
+        opacity: 0.88;
+        background: linear-gradient(180deg, #ffffff, #f5fbf6);
+    }
+
+    .stepTop {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+    }
+
+    .stepTitle {
+        font-weight: 800;
+        font-size: 1.02rem;
+        color: var(--brand);
+        margin-bottom: 8px;
+    }
+
+    .stepText {
+        color: var(--text);
+    }
+
+    .stepHelp {
+        margin-top: 10px;
+        color: var(--mutedDark);
+        font-size: 0.94rem;
+    }
+
+    .stepNumber {
+        flex: 0 0 auto;
+        min-width: 46px;
+        height: 46px;
+        border-radius: 14px;
+        background: var(--brandSoft);
+        border: 1px solid var(--brandLine);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        color: var(--brand);
+    }
+
+    .stepActionRow {
+        margin-top: 16px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .stepExplainBox {
+        margin-top: 16px;
+        background: linear-gradient(180deg, #fffef9, #fffdf4);
+        border-color: #f0e2a9;
+    }
+
+    /* ---------- messages / alerts ---------- */
+    .errorBox {
+        margin-top: 18px;
+        background: #fff4f4;
+        border: 1px solid #efc2c2;
+        color: #9f2d2d;
+        border-radius: 16px;
+        padding: 13px 14px;
+        font-weight: 700;
+    }
+
+    /* ---------- chat ---------- */
+    .chatDock {
+        position: fixed;
+        right: 20px;
+        bottom: 20px;
+        z-index: 60;
+    }
+
+    .helpFab {
+        background: linear-gradient(180deg, var(--accent), #df9c00);
+        color: #362700;
+        padding: 14px 18px;
+        border-radius: 999px;
+        font-weight: 800;
+        box-shadow: 0 18px 36px rgba(15, 23, 42, 0.20);
+        border: 1px solid rgba(0, 0, 0, 0.05);
+    }
+
+        .helpFab:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 22px 44px rgba(15, 23, 42, 0.24);
+        }
+
+    .chatOverlay {
+        position: fixed;
+        inset: 0;
+        z-index: 80;
+        background: rgba(15, 23, 42, 0.42);
+        backdrop-filter: blur(8px);
+        padding: 18px;
+        display: flex;
+        align-items: stretch;
+        justify-content: stretch;
+    }
+
+    .chatOverlayPanel {
+        width: min(100%, 1100px);
+        margin: 0 auto;
+        background: linear-gradient(180deg, #ffffff, #f8fbff);
+        border: 1px solid #dce5f0;
+        border-radius: 28px;
+        box-shadow: var(--shadowLg);
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        overflow: hidden;
+        min-height: calc(100vh - 36px);
+    }
+
+    .chatOverlayHeader {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 22px 22px 18px;
+        background: linear-gradient(180deg, #fbfdff, #f2f7fd);
+        border-bottom: 1px solid var(--line);
+    }
+
+    .chatStepTag {
+        margin-top: 10px;
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 8px 12px;
+        background: var(--brandSoft);
+        color: var(--brand);
+        border: 1px solid var(--brandLine);
+        font-size: 0.84rem;
+        font-weight: 800;
+    }
+
+    .chatIconBtn {
+        background: #fff;
+        color: var(--brand);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 10px 14px;
+        font-weight: 700;
+        box-shadow: var(--shadowXs);
+    }
+
+        .chatIconBtn:hover {
+            background: #f8fbff;
+            border-color: var(--brandLine);
+        }
+
+    .chatOverlayBody {
+        overflow: auto;
+        padding: 22px;
+        background: linear-gradient(180deg, rgba(243, 248, 255, 0.65) 0%, rgba(255, 255, 255, 0.9) 40%, rgba(249, 251, 254, 0.95) 100%);
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .chatOverlayFooter {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 12px;
+        padding: 18px 22px 22px;
+        border-top: 1px solid var(--line);
+        background: #fff;
+    }
+
+    .chatQuickPrompts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 14px;
+    }
+
+    .chatQuickBtn {
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--brand);
+        border-radius: 999px;
+        padding: 10px 12px;
+        font-size: 0.9rem;
+        font-weight: 700;
+        box-shadow: var(--shadowXs);
+        transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+    }
+
+        .chatQuickBtn:hover {
+            background: var(--brandSoft);
+            border-color: var(--brandLine);
+            transform: translateY(-1px);
+        }
+
+    .chatBubble {
+        max-width: min(760px, 92%);
+        padding: 14px 16px;
+        border-radius: 18px;
+        font-size: 0.97rem;
+        line-height: 1.5;
+        box-shadow: var(--shadowXs);
+        white-space: pre-wrap;
+    }
+
+    .chatAssistant {
+        align-self: flex-start;
+        background: #ffffff;
+        border: 1px solid var(--line);
+        color: var(--text);
+        border-top-left-radius: 8px;
+    }
+
+    .chatUser {
+        align-self: flex-end;
+        background: linear-gradient(180deg, var(--brand2), var(--brand));
+        color: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-top-right-radius: 8px;
+    }
+
+    /* ---------- utility ---------- */
+    .softBox {
+        background: linear-gradient(180deg, #ffffff, #f9fbfe);
+    }
+
+    .sectionTitle {
+        font-size: 1.2rem;
+    }
+
+    .small {
+        margin-top: 4px;
+    }
+
+    /* ---------- responsive ---------- */
+    @media (max-width: 980px) {
+        .summaryGrid,
+        .wizardIssueGrid,
+        .wizardChoiceGrid,
+        .wizardTwoCol {
+            grid-template-columns: 1fr;
+        }
+
+        .wizardCard {
+            padding: 22px;
+        }
+
+        .chatOverlayPanel {
+            width: 100%;
+            min-height: calc(100vh - 36px);
+        }
+    }
+
+    @media (max-width: 720px) {
+        .landingPageWrap,
+        .wizardPageWrap {
+            padding: 16px 12px 30px;
+        }
+
+        .landingIntroCard,
+        .wizardCard,
+        .wizardProgressCard {
+            border-radius: 20px;
+        }
+
+        .wizardTopBar,
+        .wizardActions,
+        .chatOverlayHeader,
+        .chatOverlayFooter,
+        .stepTop {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+            .wizardActions > * {
+                width: 100%;
+            }
+
+        .chatOverlay {
+            padding: 0;
+        }
+
+        .chatOverlayPanel {
+            min-height: 100vh;
+            border-radius: 0;
+            border-left: none;
+            border-right: none;
+            border-top: none;
+        }
+
+        .chatOverlayHeader,
+        .chatOverlayBody,
+        .chatOverlayFooter {
+            padding-left: 14px;
+            padding-right: 14px;
+        }
+
+        .chatOverlayFooter {
+            grid-template-columns: 1fr;
+        }
+
+        .chatBubble {
+            max-width: 100%;
+        }
+
+        .helpFab {
+            right: 0;
+            bottom: 0;
+            width: auto;
+        }
+
+        .chatDock {
+            right: 14px;
+            bottom: 14px;
+        }
+    }
 }

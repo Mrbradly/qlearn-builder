@@ -181,6 +181,10 @@ async function parseJsonResponse(res: Response) {
         throw new Error("The server returned an invalid response.");
     }
 
+    if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || "The request could not be completed.");
+    }
+
     return data;
 }
 
@@ -222,7 +226,7 @@ export default function Page() {
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
         {
             role: "assistant",
-            text: "Hi, I’m your IT support helper. I can help with general school IT questions now, and once your troubleshoot steps are ready I can explain the current step in simple language.",
+            text: "Hi, I’m your IT support helper. I can help at any point in this form. Ask me a general school IT question now, and later I can explain the exact troubleshooting step as well.",
         },
     ]);
 
@@ -299,7 +303,7 @@ export default function Page() {
         setChatMessages([
             {
                 role: "assistant",
-                text: "Hi, I’m your IT support helper. I can help with general school IT questions now, and once your troubleshoot steps are ready I can explain the current step in simple language.",
+                text: "Hi, I’m your IT support helper. I can help at any point in this form. Ask me a general school IT question now, and later I can explain the exact troubleshooting step as well.",
             },
         ]);
     }
@@ -373,7 +377,6 @@ export default function Page() {
         setCompletedSteps([]);
         setActiveStepIndex(0);
         setOpenExplainIndex(null);
-        setIsChatOpen(false);
 
         try {
             const triageRes = await fetch("/api/helpdesk", {
@@ -390,10 +393,6 @@ export default function Page() {
             });
 
             const triageData = await parseJsonResponse(triageRes);
-
-            if (!triageRes.ok || !triageData?.ok) {
-                throw new Error(triageData?.error || "Could not create the triage summary.");
-            }
 
             const summary: AiSummary = {
                 likelyIssue: triageData.likelyIssue || "",
@@ -424,17 +423,13 @@ export default function Page() {
 
             const fixData = await parseJsonResponse(fixRes);
 
-            if (!fixRes.ok || !fixData?.ok) {
-                throw new Error(fixData?.error || "Could not create troubleshooting steps.");
-            }
-
             const safeSteps: FixStep[] = Array.isArray(fixData.fixSteps) ? fixData.fixSteps : [];
             setFixSteps(safeSteps);
             setActiveStepIndex(0);
             setChatMessages([
                 {
                     role: "assistant",
-                    text: "Your troubleshooting steps are ready. I will stay focused on the current step and explain exactly what to do, what it should look like, or what to try if you get stuck.",
+                    text: "Your troubleshooting steps are ready. I can now explain each step in simple language and stay focused on the current step.",
                 },
             ]);
             setWizardStep("summary");
@@ -464,32 +459,25 @@ export default function Page() {
 
     async function sendChatMessage(messageText?: string) {
         const finalMessage = (messageText ?? chatInput).trim();
-        if (!finalMessage) return;
+        if (!finalMessage || chatLoading) return;
 
         setChatMessages((prev) => [...prev, { role: "user", text: finalMessage }]);
         setChatInput("");
         setChatLoading(true);
 
         try {
-            if (!currentStep) {
-                setChatMessages((prev) => [
-                    ...prev,
-                    {
-                        role: "assistant",
-                        text: "I can help with general troubleshooting first. Tell me whether this is a power issue, EQNet issue, BYOx issue, or another school laptop problem.",
-                    },
-                ]);
-                return;
-            }
+            const mode = currentStep ? "chat_help" : "general_help";
 
             const res = await fetch("/api/helpdesk", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    mode: "chat_help",
+                    mode,
                     student,
                     device,
+                    deviceProfile,
                     issueCategory,
+                    triageAnswers,
                     aiSummary,
                     currentStep,
                     userMessage: finalMessage,
@@ -502,15 +490,19 @@ export default function Page() {
                 ...prev,
                 {
                     role: "assistant",
-                    text: data?.reply || "I couldn’t load a reply just then. Try asking what to do first.",
+                    text:
+                        data?.reply ||
+                        "I couldn’t load a reply just then. Try asking the question in a different way.",
                 },
             ]);
-        } catch {
+        } catch (err: any) {
             setChatMessages((prev) => [
                 ...prev,
                 {
                     role: "assistant",
-                    text: "That did not load properly. Try again, or ask staff if the problem keeps happening.",
+                    text:
+                        err?.message ||
+                        "That did not load properly. Try again, or ask staff if the problem keeps happening.",
                 },
             ]);
         } finally {
@@ -839,6 +831,31 @@ export default function Page() {
         );
     }
 
+    function renderGeneralQuickPrompts() {
+        return (
+            <div className="chatQuickPrompts">
+                <button
+                    className="chatQuickBtn"
+                    onClick={() => void sendChatMessage("My laptop is not turning on. What should I check first?")}
+                >
+                    Laptop not turning on
+                </button>
+                <button
+                    className="chatQuickBtn"
+                    onClick={() => void sendChatMessage("EQNet is not working. What should I try first?")}
+                >
+                    EQNet not working
+                </button>
+                <button
+                    className="chatQuickBtn"
+                    onClick={() => void sendChatMessage("BYOx is not working. What should I try first?")}
+                >
+                    BYOx not working
+                </button>
+            </div>
+        );
+    }
+
     function renderChatAssistant() {
         return (
             <>
@@ -864,7 +881,7 @@ export default function Page() {
                                         IT support helper
                                     </div>
                                     <div className="small">
-                                        Ask what to do, what this step looks like, or what to try next.
+                                        Ask what to do, what it looks like, or what to try next.
                                     </div>
 
                                     {currentStep ? (
@@ -872,7 +889,7 @@ export default function Page() {
                                             Step {currentStep.stepNumber}: {currentStep.title}
                                         </div>
                                     ) : (
-                                        <div className="chatStepTag">General help</div>
+                                        <div className="chatStepTag">General help available now</div>
                                     )}
                                 </div>
 
@@ -890,32 +907,12 @@ export default function Page() {
                                     </div>
                                 ) : (
                                     <div className="softBox" style={{ marginTop: 0 }}>
-                                        <div className="softBoxTitle">AI help</div>
+                                        <div className="softBoxTitle">General AI help</div>
                                         <div className="stepText">
-                                            I can help with general IT questions. Once your troubleshoot steps are generated,
-                                            I can also explain the exact current step in simple language.
+                                            I can help before the troubleshoot steps are generated. Ask what to try first,
+                                            which category fits best, or what basic safe checks make sense for your problem.
                                         </div>
-
-                                        <div className="chatQuickPrompts">
-                                            <button
-                                                className="chatQuickBtn"
-                                                onClick={() => void sendChatMessage("My laptop is not turning on. What should I check first?")}
-                                            >
-                                                Laptop not turning on
-                                            </button>
-                                            <button
-                                                className="chatQuickBtn"
-                                                onClick={() => void sendChatMessage("EQNet is not working. What should I try first?")}
-                                            >
-                                                EQNet not working
-                                            </button>
-                                            <button
-                                                className="chatQuickBtn"
-                                                onClick={() => void sendChatMessage("BYOx is not working. What should I try first?")}
-                                            >
-                                                BYOx not working
-                                            </button>
-                                        </div>
+                                        {renderGeneralQuickPrompts()}
                                     </div>
                                 )}
 
@@ -942,9 +939,9 @@ export default function Page() {
                                             void sendChatMessage();
                                         }
                                     }}
-                                    placeholder="Ask for help with this step..."
+                                    placeholder="Ask for help..."
                                 />
-                                <button className="btnPrimary" onClick={() => void sendChatMessage()}>
+                                <button className="btnPrimary" onClick={() => void sendChatMessage()} disabled={chatLoading}>
                                     Send
                                 </button>
                             </div>

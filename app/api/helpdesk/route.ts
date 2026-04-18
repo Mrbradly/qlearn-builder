@@ -24,24 +24,30 @@ function safeJsonParse(raw: string) {
 
 function extractText(response: any): string {
     if (typeof response?.output_text === "string" && response.output_text.trim()) {
-        return response.output_text;
+        return response.output_text.trim();
     }
 
     const output = response?.output;
     if (!Array.isArray(output)) return "";
+
+    const chunks: string[] = [];
 
     for (const item of output) {
         const content = item?.content;
         if (!Array.isArray(content)) continue;
 
         for (const part of content) {
-            if (typeof part?.text === "string" && part.text.trim()) return part.text;
-            if (typeof part?.output_text === "string" && part.output_text.trim()) return part.output_text;
-            if (typeof part?.text?.value === "string" && part.text.value.trim()) return part.text.value;
+            if (typeof part?.text === "string" && part.text.trim()) {
+                chunks.push(part.text.trim());
+            } else if (typeof part?.output_text === "string" && part.output_text.trim()) {
+                chunks.push(part.output_text.trim());
+            } else if (typeof part?.text?.value === "string" && part.text.value.trim()) {
+                chunks.push(part.text.value.trim());
+            }
         }
     }
 
-    return "";
+    return chunks.join("\n").trim();
 }
 
 async function createJsonResponse(opts: {
@@ -57,13 +63,10 @@ async function createJsonResponse(opts: {
         input: opts.input,
         max_output_tokens: opts.max_output_tokens ?? 1200,
         store: false,
-        text: {
-            format: { type: "json_object" },
-        },
     });
 
-    const raw = extractText(response) || "{}";
-    const parsed = safeJsonParse(raw);
+    const raw = extractText(response);
+    const parsed = raw ? safeJsonParse(raw) : null;
 
     return { raw, parsed };
 }
@@ -339,7 +342,7 @@ Return JSON only.
 
     if (!parsed) {
         return NextResponse.json(
-            { ok: false, error: "Model returned non-json text.", raw: String(raw).slice(0, 400) },
+            { ok: false, error: "Model returned non-json text.", raw: String(raw).slice(0, 700) },
             { status: 502 }
         );
     }
@@ -448,7 +451,7 @@ Return JSON only.
 
     if (!parsed) {
         return NextResponse.json(
-            { ok: false, error: "Model returned non-json text.", raw: String(raw).slice(0, 400) },
+            { ok: false, error: "Model returned non-json text.", raw: String(raw).slice(0, 700) },
             { status: 502 }
         );
     }
@@ -487,6 +490,91 @@ Return JSON only.
     return NextResponse.json({
         ok: true,
         fixSteps,
+    });
+}
+
+async function runHelpdeskGeneralHelp(opts: {
+    client: OpenAI;
+    model: string;
+    body: any;
+}) {
+    const student = opts.body?.student ?? {};
+    const device = opts.body?.device ?? {};
+    const deviceProfile = opts.body?.deviceProfile ?? null;
+    const issueCategory = asString(opts.body?.issueCategory);
+    const triageAnswers = (opts.body?.triageAnswers ?? {}) as Record<string, any>;
+    const userMessage = asString(opts.body?.userMessage);
+
+    const instructions = `
+You output valid JSON only.
+
+You are a school IT support helper inside a student-facing web app.
+
+Your job:
+- answer the student's general IT question even before a final troubleshooting step exists
+- use the available student details, device information, issue category, and triage answers
+- give safe, practical first steps
+- stay student-friendly and calm
+- keep the answer focused on what the student can try now
+
+Rules:
+- Australian spelling
+- Present tense
+- Student-safe wording
+- No BIOS, registry, command line, or hardware disassembly
+- No unsafe or admin-only instructions
+- Prefer 2 to 5 short sentences
+- If the student has not chosen an issue yet, help them narrow it down
+- If the question sounds like power, EQNet, or BYOx, give category-relevant safe checks
+- If the issue may need staff support, say so clearly but calmly
+
+Return JSON only with EXACT keys:
+{
+  "reply": string
+}
+`.trim();
+
+    const input = `
+Student:
+- MSID: ${asString(student?.msid) || "unknown"}
+- Year level: ${asString(student?.yearLevel) || "unknown"}
+- Device ownership: ${asString(student?.deviceOwnership) || "unknown"}
+
+Issue category:
+${issueCategory || "unknown"}
+
+Device details:
+${summariseDevice(device, deviceProfile)}
+
+Structured triage answers:
+${summariseTriageAnswers(issueCategory, triageAnswers)}
+
+${buildSchoolContext(device, issueCategory)}
+
+Student question:
+${userMessage || "Please help me work out what to try first."}
+
+Return JSON only.
+`.trim();
+
+    const { raw, parsed } = await createJsonResponse({
+        client: opts.client,
+        model: opts.model,
+        instructions,
+        input,
+        max_output_tokens: 500,
+    });
+
+    if (!parsed) {
+        return NextResponse.json(
+            { ok: false, error: "Model returned non-json text.", raw: String(raw).slice(0, 700) },
+            { status: 502 }
+        );
+    }
+
+    return NextResponse.json({
+        ok: true,
+        reply: asString(parsed?.reply),
     });
 }
 
@@ -600,7 +688,7 @@ Return JSON only.
 
     if (!parsed) {
         return NextResponse.json(
-            { ok: false, error: "Model returned non-json text.", raw: String(raw).slice(0, 400) },
+            { ok: false, error: "Model returned non-json text.", raw: String(raw).slice(0, 700) },
             { status: 502 }
         );
     }
@@ -635,6 +723,10 @@ export async function POST(req: Request) {
             return await runHelpdeskFixSteps({ client, model: modelName, body });
         }
 
+        if (mode === "general_help") {
+            return await runHelpdeskGeneralHelp({ client, model: modelName, body });
+        }
+
         if (mode === "chat_help") {
             return await runHelpdeskChatHelp({ client, model: modelName, body });
         }
@@ -642,7 +734,7 @@ export async function POST(req: Request) {
         return NextResponse.json(
             {
                 ok: false,
-                error: "Unsupported mode. Use triage, fix_steps, or chat_help.",
+                error: "Unsupported mode. Use triage, fix_steps, general_help, or chat_help.",
             },
             { status: 400 }
         );
