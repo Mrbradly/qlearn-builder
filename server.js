@@ -13,9 +13,18 @@ const apiRoutes = require('./routes/apiRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const isProduction = process.env.NODE_ENV === 'production';
+
+/* -----------------------------
+   EJS setup
+----------------------------- */
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
+
+/* -----------------------------
+   Security / logging
+----------------------------- */
 
 app.use(
     helmet({
@@ -23,7 +32,13 @@ app.use(
     })
 );
 
-app.use(morgan('dev'));
+if (!isProduction) {
+    app.use(morgan('dev'));
+}
+
+/* -----------------------------
+   Body parsing
+----------------------------- */
 
 app.use(
     express.json({
@@ -38,7 +53,15 @@ app.use(
     })
 );
 
+/* -----------------------------
+   Static files
+----------------------------- */
+
 app.use(express.static(path.join(__dirname, 'public')));
+
+/* -----------------------------
+   Session setup
+----------------------------- */
 
 app.use(
     session({
@@ -48,20 +71,33 @@ app.use(
             'replace-this-with-a-long-random-secret-before-deployment',
         resave: false,
         saveUninitialized: false,
+        proxy: true,
         cookie: {
             httpOnly: true,
             sameSite: 'lax',
-            secure: process.env.NODE_ENV === 'production',
+            secure: isProduction,
             maxAge: 1000 * 60 * 60 * 8
         }
     })
 );
 
+/* -----------------------------
+   Current user middleware
+----------------------------- */
+
 app.use(attachCurrentUser);
+
+/* -----------------------------
+   Routes
+----------------------------- */
 
 app.use(authRoutes);
 app.use('/', pageRoutes);
 app.use('/api', apiRoutes);
+
+/* -----------------------------
+   404 page
+----------------------------- */
 
 app.use((req, res) => {
     const layout = req.currentUser ? 'app' : 'auth';
@@ -75,6 +111,10 @@ app.use((req, res) => {
     });
 });
 
+/* -----------------------------
+   Error page
+----------------------------- */
+
 app.use((err, req, res, next) => {
     console.error(err);
 
@@ -83,13 +123,22 @@ app.use((err, req, res, next) => {
     res.status(500).render('pages/error', {
         title: 'Server Error',
         active: '',
-        error: process.env.NODE_ENV === 'development' ? err : null,
+        error: !isProduction ? err : null,
         secureHeader: false,
         layout,
         currentUser: req.currentUser || null
     });
 });
 
-app.listen(PORT, () => {
-    console.log(`MSHS IT Help Desk running at http://localhost:${PORT}`);
-});
+/* -----------------------------
+   Local dev only
+   Vercel needs module.exports
+----------------------------- */
+
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`MSHS IT Help Desk running at http://localhost:${PORT}`);
+    });
+}
+
+module.exports = app;
