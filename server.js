@@ -134,7 +134,6 @@ app.use((err, req, res, next) => {
    Local dev only
    Vercel needs module.exports
 ----------------------------- */
-
 if (require.main === module) {
     app.listen(PORT, () => {
         console.log(`MSHS IT Help Desk running at http://localhost:${PORT}`);
