@@ -1,0 +1,20 @@
+<%- include('../partials/layout-start') %>
+<section class="application-wrap">
+  <form class="card application-card" action="/api/loan-applications" method="post">
+    <div class="application-title"><span class="metric-icon blue">▭</span><div><h1>Short-Term Laptop Loan Application</h1><p>Please complete all required fields. We’ll use this information to assess your request and be in touch with next steps.</p></div></div>
+    <h3>1. Student Details</h3>
+    <div class="form-grid three"><label>Student Name <b>*</b><input name="studentName" placeholder="Enter student full name" required></label><label>Student ID <b>*</b><input name="studentId" placeholder="Enter student ID" required></label><label>Year Level <b>*</b><select name="yearLevel" required><option>Select year level</option><option>Year 7</option><option>Year 8</option><option>Year 9</option><option>Year 10</option><option>Year 11</option><option>Year 12</option></select></label></div>
+    <h3>2. Parent or Carer Details</h3>
+    <div class="form-grid three"><label>Parent or Carer Full Name <b>*</b><input name="parentName" placeholder="Enter your full name" required></label><label>Parent Email <b>*</b><input type="email" name="parentEmail" placeholder="Enter your email address" required></label><label>Contact Number <b>*</b><input name="phone" placeholder="Enter contact number" required></label></div>
+    <h3>3. Loan Request Details</h3>
+    <div class="form-grid two"><label>Reason for Loan Request <b>*</b><textarea name="reason" maxlength="500" placeholder="Please provide details about why you need a laptop loan." required></textarea><small>0 / 500</small></label><label>Requested Loan Length <b>*</b><select name="loanLength" required><option>Select loan length</option><option>1 week</option><option>2 weeks</option><option>3 weeks</option><option>4 weeks</option></select><small>Short-term loans are available for up to 28 days.</small></label></div>
+    <div class="agree-row"><input type="checkbox" name="agreement" required><p>I confirm that the information provided is accurate and complete. <b>*</b><br>I agree to the MSHS <a>Device Loan Terms and Conditions.</a></p></div>
+    <div class="application-actions"><button type="button" class="btn btn-outline wide">⌑ Save Draft <small>Save and return later</small></button><button type="submit" class="btn btn-navy wide">▣ Submit Application <small>Review and submit your request</small></button></div>
+  </form>
+  <aside class="application-side">
+    <div class="card step-card"><h3>Application Progress</h3><div class="steps"><div class="active"><b>1</b><p>Student Details<small>Provide student information</small></p></div><div><b>2</b><p>Parent Details<small>Provide your contact details</small></p></div><div><b>3</b><p>Loan Request<small>Tell us about your request</small></p></div><div><b>4</b><p>Review &amp; Submit<small>Check and submit application</small></p></div></div></div>
+    <div class="card secure-card"><h3><span class="metric-icon blue sm">▣</span> Your Information is Secure</h3><p>✓ All information is encrypted in transit and at rest.</p><p>✓ Access is restricted to authorised MSHS staff only.</p><p>✓ Your details are never shared with third parties.</p><p>✓ You can save your application and return at any time.</p><div class="secure-note">▣ <strong>This is a secure form</strong><br>All data is protected with enterprise-grade security.</div></div>
+  </aside>
+</section>
+<footer class="public-footer">Need help? Contact the MSHS IT Help Desk <span>|</span> <a>ithelpdesk@mshs.eq.edu.au</a></footer>
+<%- include('../partials/layout-end') %>

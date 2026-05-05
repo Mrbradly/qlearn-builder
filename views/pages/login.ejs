@@ -1,0 +1,66 @@
+<%- include('../partials/layout-start') %>
+
+<section class="login-shell">
+  <article class="login-card">
+    <div class="login-mark">
+      <div class="crest large">
+        <span class="crest-m">M</span>
+        <span class="crest-ribbon">MAROOCHYDORE</span>
+      </div>
+
+      <div>
+        <h1>Sign in to MSHS IT Help Desk</h1>
+        <p>Device Loans &amp; IT Support</p>
+      </div>
+    </div>
+
+    <% if (error) { %>
+      <div class="form-alert danger"><%= error %></div>
+    <% } %>
+
+    <% if (success) { %>
+      <div class="form-alert success"><%= success %></div>
+    <% } %>
+
+    <form action="/login" method="post" class="login-form">
+      <input type="hidden" name="next" value="<%= next || '/dashboard' %>" />
+
+      <label>
+        <span>Email</span>
+        <input
+          name="email"
+          type="email"
+          placeholder="Enter your school email"
+          autocomplete="username"
+          required
+        />
+      </label>
+
+      <label>
+        <span>Password</span>
+        <input
+          name="password"
+          type="password"
+          placeholder="Enter your password"
+          autocomplete="current-password"
+          required
+        />
+      </label>
+
+      <button type="submit" class="btn btn-primary full-width">Sign In</button>
+    </form>
+
+    <div class="login-footer-actions">
+      <a href="/forgot-password">Forgot password?</a>
+    </div>
+
+    <div class="login-note">
+      <strong>Secure staff access</strong>
+      <p>
+        Staff access is role-based. Parent application approvals are restricted to authorised account owner access only.
+      </p>
+    </div>
+  </article>
+</section>
+
+<%- include('../partials/layout-end') %>

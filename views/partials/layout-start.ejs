@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title><%= title %> | MSHS IT Help Desk</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body class="<%= layout === 'public' ? 'public-page' : layout === 'auth' ? 'auth-page' : 'app-page' %>">
+  <%- include('header') %>
+  <% if (layout === 'app') { %>
+    <div class="app-shell">
+      <%- include('sidebar') %>
+      <main class="main-content">
+  <% } else if (layout === 'public') { %>
+    <main class="public-content">
+  <% } else { %>
+    <main class="auth-content">
+  <% } %>

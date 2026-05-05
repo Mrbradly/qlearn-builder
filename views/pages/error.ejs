@@ -1,0 +1,3 @@
+<%- include('../partials/layout-start') %>
+<section class="placeholder card"><h1>Something went wrong</h1><p>The server hit an error.</p><% if (error) { %><pre><%= error.stack %></pre><% } %></section>
+<%- include('../partials/layout-end') %>

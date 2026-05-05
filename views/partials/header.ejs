@@ -1,0 +1,33 @@
+<header class="topbar">
+  <div class="brand-row">
+    <a href="/dashboard" class="crest" aria-label="MSHS home">
+      <span class="crest-m">M</span>
+      <span class="crest-ribbon">MAROOCHYDORE</span>
+    </a>
+    <div class="brand-title">MSHS IT Help Desk</div>
+    <div class="brand-divider"></div>
+    <div class="brand-subtitle">Device Loans &amp; IT Support</div>
+  </div>
+
+  <% if (secureHeader) { %>
+    <div class="secure-badge">
+      <span class="secure-icon">▣</span>
+      <div>
+        <strong>Secure Application</strong>
+        <small>Your information is protected</small>
+      </div>
+    </div>
+  <% } else if (currentUser) { %>
+    <div class="user-tools">
+      <div class="bell"><span>⌁</span><b>2</b></div>
+      <div class="avatar"><%= currentUser.initials %></div>
+      <div class="user-meta">
+        <strong><%= currentUser.fullName %></strong>
+        <small><%= currentUser.roleLabel %></small>
+      </div>
+      <form action="/logout" method="post" class="logout-form">
+        <button type="submit" class="logout-link">Logout</button>
+      </form>
+    </div>
+  <% } %>
+</header>

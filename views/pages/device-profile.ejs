@@ -1,0 +1,119 @@
+<%- include('../partials/layout-start') %>
+
+<%
+  const profile = typeof device !== 'undefined' ? device : {
+    assetNumber: 'MSHS-LT-032',
+    serialNumber: '3T7R5W4',
+    model: 'Dell Latitude 5440',
+    type: 'Loan Laptop',
+    status: 'loaned',
+    warranty: '14 Jun 2026',
+    days: 'in 21 days',
+    purchaseDate: '15 Jun 2024',
+    chargerIncluded: 'Yes',
+    conditionNotes: 'Good condition. Minor surface wear on lid.'
+  };
+%>
+
+<section class="page-head profile-head device-profile-head">
+  <div>
+    <h1>Device Profile</h1>
+    <a href="/devices" class="back-link">← Back to Devices</a>
+  </div>
+
+  <div class="actions profile-actions">
+    <button class="btn btn-outline" type="button">✎ Edit Device</button>
+    <button class="btn btn-primary" type="button">♙ Assign Device</button>
+    <button class="btn btn-success" type="button">✓ Mark Returned</button>
+    <button class="btn btn-light" type="button">▤ Archive</button>
+  </div>
+</section>
+
+<section class="card profile-hero device-profile-hero">
+  <div class="laptop-visual polished-laptop">
+    <div class="screen"></div>
+    <div class="keyboard"></div>
+  </div>
+
+  <div class="profile-title">
+    <span class="tag info">LOAN LAPTOP</span>
+    <h2><%= profile.model %></h2>
+    <span class="status <%= profile.status %> big"><%= profile.status.replaceAll('_', ' ') %></span>
+  </div>
+
+  <div class="detail-grid">
+    <p><span>◇ Asset Number</span><strong><%= profile.assetNumber %></strong></p>
+    <p><span>▥ Serial Number</span><strong><%= profile.serialNumber %></strong></p>
+    <p><span>▭ Model</span><strong><%= profile.model %></strong></p>
+    <p><span>▣ Device Type</span><strong><%= profile.type %></strong></p>
+    <p><span>ⓘ Status</span><strong><em class="status <%= profile.status %>"><%= profile.status.replaceAll('_', ' ') %></em></strong></p>
+  </div>
+
+  <div class="detail-grid right">
+    <p><span>♢ Warranty Expiry</span><strong class="warning-text"><%= profile.warranty %> (<%= profile.days %>)</strong></p>
+    <p><span>▣ Purchase Date</span><strong><%= profile.purchaseDate || '15 Jun 2024' %></strong></p>
+    <p><span>▤ Charger Included</span><strong class="success-text"><%= profile.chargerIncluded || 'Yes' %></strong></p>
+    <p><span>☷ Condition Notes</span><strong><%= profile.conditionNotes || 'Good condition. Minor surface wear on lid.' %></strong></p>
+  </div>
+</section>
+
+<section class="two-col profile-lower device-profile-lower">
+  <article class="card assignment-card">
+    <h3>♙ Current Assignment</h3>
+
+    <div class="student-card">
+      <span class="round-avatar">JS</span>
+      <div>
+        <strong>James Smith</strong>
+        <small>Year 10</small>
+      </div>
+    </div>
+
+    <p><span>♙ Loan Type</span><b class="tag info">Active Short-Term Loan</b></p>
+    <p><span>▣ Issued Date</span><b>29 May 2025</b></p>
+    <p><span>▣ Expected Return Date</span><b class="warning-text">19 Jun 2025 (in 5 days)</b></p>
+    <p><span>✉ Parent / Guardian Email</span><b>sarah.smith@email.com</b></p>
+
+    <a class="btn wide soft-blue" href="/loans">View Loan Details →</a>
+  </article>
+
+  <article class="card timeline-card">
+    <h3>◷ Device Activity Timeline</h3>
+
+    <div class="timeline">
+      <div>
+        <span class="timeline-dot green-bg">✓</span>
+        <p><strong>Issued to James Smith (Year 10)</strong><br>Issued by Admin User <b class="tag info">Active Loan</b></p>
+        <small>29 May 2025, 9:15 AM</small>
+      </div>
+
+      <div>
+        <span class="timeline-dot blue-bg">✂</span>
+        <p><strong>Repaired</strong><br>Replaced keyboard under warranty. Repaired by Tech Team</p>
+        <small>12 Apr 2025, 11:20 AM</small>
+      </div>
+
+      <div>
+        <span class="timeline-dot orange-bg">♢</span>
+        <p><strong>Warranty Note</strong><br>Battery health checked, 94% capacity. No action required.</p>
+        <small>05 Mar 2025, 2:45 PM</small>
+      </div>
+
+      <div>
+        <span class="timeline-dot blue-bg">↩</span>
+        <p><strong>Returned by Mia Johnson (Year 10)</strong><br>Device returned in good condition. Received by Admin User</p>
+        <small>28 Jan 2025, 10:30 AM</small>
+      </div>
+
+      <div>
+        <span class="timeline-dot green-bg">✓</span>
+        <p><strong>Issued to Mia Johnson (Year 10)</strong><br>Issued by Admin User</p>
+        <small>15 Jan 2025, 9:00 AM</small>
+      </div>
+    </div>
+
+    <a class="timeline-link" href="/devices">View full history ›</a>
+  </article>
+</section>
+
+<%- include('../partials/layout-end') %>

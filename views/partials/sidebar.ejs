@@ -1,0 +1,20 @@
+<aside class="sidebar">
+  <nav class="nav-list">
+    <a class="nav-item <%= active === 'dashboard' ? 'active' : '' %>" href="/dashboard"><span>▦</span>Dashboard</a>
+    <a class="nav-item <%= active === 'devices' ? 'active' : '' %>" href="/devices"><span>▭</span>Devices</a>
+    <a class="nav-item <%= active === 'loans' ? 'active' : '' %>" href="/loans"><span>⟳</span>Loans</a>
+    <% if (currentUser && currentUser.canManageParentApplications) { %>
+      <a class="nav-item <%= active === 'applications' ? 'active' : '' %>" href="/parent-applications"><span>♙</span>Parent Applications</a>
+    <% } %>
+    <a class="nav-item <%= active === 'warranty' ? 'active' : '' %>" href="/warranty-alerts"><span>♢</span>Warranty Alerts</a>
+    <a class="nav-item <%= active === 'issues' ? 'active' : '' %>" href="/issues"><span>◴</span>IT Issues</a>
+    <a class="nav-item <%= active === 'damage' ? 'active' : '' %>" href="/damage-reports"><span>△</span>Lab Damage Reports</a>
+    <a class="nav-item <%= active === 'students' ? 'active' : '' %>" href="/students"><span>♙</span>Students</a>
+    <a class="nav-item <%= active === 'reports' ? 'active' : '' %>" href="/reports"><span>▥</span>Reports</a>
+  </nav>
+  <div class="sidebar-school">
+    <div class="mini-crest">M</div>
+    <div><strong>MAROOCHYDORE</strong><small>STATE HIGH SCHOOL</small></div>
+  </div>
+  <button class="collapse-btn"><span>‹</span> Collapse</button>
+</aside>

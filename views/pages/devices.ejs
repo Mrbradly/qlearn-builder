@@ -1,0 +1,280 @@
+<%- include('../partials/layout-start') %>
+
+<%
+  const deviceList = Array.isArray(devices) ? devices : [];
+  const totalDevices = deviceList.length;
+  const countByStatus = (status) => deviceList.filter(d => d.status === status).length;
+  const availableCount = countByStatus('available');
+  const loanedCount = countByStatus('loaned');
+  const damagedCount = countByStatus('damaged');
+  const outOfWarrantyCount = countByStatus('out_of_warranty');
+  const retiredCount = countByStatus('retired');
+  const actionCount = damagedCount + outOfWarrantyCount;
+  const displayTotal = totalDevices || 0;
+%>
+
+<section class="page-head devices-head clean-devices-head">
+  <div>
+    <p class="eyebrow">Inventory control</p>
+    <h1>Device Inventory</h1>
+    <p>Track loan laptops, lab devices, warranty status and student assignments from one clean workspace.</p>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-primary" id="openAddDeviceModal" type="button">＋ Add Device</button>
+    <button class="btn btn-light" id="exportDevicesBtn" type="button">⇩ Export CSV</button>
+  </div>
+</section>
+
+<section class="device-command-grid" aria-label="Device inventory summary">
+  <button class="device-stat-card active" type="button" data-device-filter="all">
+    <span class="device-stat-icon navy">▦</span>
+    <span>
+      <strong><%= displayTotal %></strong>
+      <small>All devices</small>
+    </span>
+  </button>
+
+  <button class="device-stat-card" type="button" data-device-filter="available">
+    <span class="device-stat-icon green">✓</span>
+    <span>
+      <strong><%= availableCount %></strong>
+      <small>Available now</small>
+    </span>
+  </button>
+
+  <button class="device-stat-card" type="button" data-device-filter="loaned">
+    <span class="device-stat-icon blue">♙</span>
+    <span>
+      <strong><%= loanedCount %></strong>
+      <small>Currently loaned</small>
+    </span>
+  </button>
+
+  <button class="device-stat-card" type="button" data-device-filter="damaged">
+    <span class="device-stat-icon red">△</span>
+    <span>
+      <strong><%= damagedCount %></strong>
+      <small>Damaged</small>
+    </span>
+  </button>
+
+  <button class="device-stat-card" type="button" data-device-filter="out_of_warranty">
+    <span class="device-stat-icon orange">◇</span>
+    <span>
+      <strong><%= outOfWarrantyCount %></strong>
+      <small>Out of warranty</small>
+    </span>
+  </button>
+</section>
+
+<section class="device-workbench-grid">
+  <div class="card device-control-card">
+    <div class="device-control-head">
+      <div>
+        <h2>Find a device fast</h2>
+        <p>Search by asset number, serial number, model, status or assigned student.</p>
+      </div>
+      <button class="btn btn-light tiny" type="button" id="resetDeviceFilters">Reset</button>
+    </div>
+
+    <div class="device-toolbar-row">
+      <label class="search-box devices-search-box clean-device-search" aria-label="Search devices">
+        ⌕
+        <input
+          id="deviceSearchInput"
+          placeholder="Search MSHS-LAP-0001, serial, model, student..."
+          autocomplete="off"
+        />
+      </label>
+
+      <div class="device-filter-pills" aria-label="Device status filters">
+        <button class="filter-chip active" type="button" data-device-filter="all">All <b><%= displayTotal %></b></button>
+        <button class="filter-chip" type="button" data-device-filter="available"><span class="dot green-dot"></span>Available <b><%= availableCount %></b></button>
+        <button class="filter-chip" type="button" data-device-filter="loaned"><span class="dot blue-dot"></span>Loaned <b><%= loanedCount %></b></button>
+        <button class="filter-chip" type="button" data-device-filter="damaged"><span class="dot red-dot"></span>Damaged <b><%= damagedCount %></b></button>
+        <button class="filter-chip" type="button" data-device-filter="out_of_warranty"><span class="dot orange-dot"></span>Warranty <b><%= outOfWarrantyCount %></b></button>
+      </div>
+    </div>
+  </div>
+
+  <aside class="card device-action-card">
+    <div class="device-action-topline">
+      <span class="device-stat-icon gold">!</span>
+      <div>
+        <h2><%= actionCount %> need attention</h2>
+        <p><%= damagedCount %> damaged and <%= outOfWarrantyCount %> out of warranty.</p>
+      </div>
+    </div>
+
+    <div class="device-action-links">
+      <button class="quick-filter-link" type="button" data-device-filter="damaged">View damaged</button>
+      <button class="quick-filter-link" type="button" data-device-filter="out_of_warranty">View warranty issues</button>
+    </div>
+  </aside>
+</section>
+
+<section class="card table-card devices-table-card clean-devices-table-card">
+  <div class="clean-table-title-row">
+    <div>
+      <h2>Inventory list</h2>
+      <p id="deviceTableCount">Showing <%= displayTotal %> of <%= displayTotal %> devices</p>
+    </div>
+    <span class="table-hint">Click an asset number to open its profile.</span>
+  </div>
+
+  <div class="table-scroll-wrap">
+    <table class="data-table devices-table clean-devices-table" id="devicesTable">
+      <thead>
+        <tr>
+          <th>Asset</th>
+          <th>Serial</th>
+          <th>Model</th>
+          <th>Type</th>
+          <th>Status</th>
+          <th>Warranty</th>
+          <th>Assigned To</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        <% deviceList.forEach(device => { %>
+          <%
+            const assignedParts = String(device.assignedTo || '—').split('\n');
+            const assignedMain = assignedParts[0] || '—';
+            const assignedSub = assignedParts[1] || '';
+            const daysText = String(device.days || '');
+            const daysNumber = parseInt(daysText, 10);
+            const warrantyClass = daysText.includes('-') || daysText === 'Expired'
+              ? 'danger-text'
+              : daysText.includes('days') && !Number.isNaN(daysNumber) && daysNumber < 200
+                ? 'warning-text'
+                : 'success-text';
+            const statusLabel = String(device.status || '').replaceAll('_', ' ');
+          %>
+          <tr
+            data-device-row
+            data-status="<%= device.status %>"
+            data-search="<%= [device.assetNumber, device.serialNumber, device.model, device.type, device.status, device.warranty, device.days, device.assignedTo].join(' ').toLowerCase() %>"
+          >
+            <td class="asset-cell">
+              <a class="asset-link" href="/devices/<%= device.assetNumber %>"><%= device.assetNumber %></a>
+            </td>
+
+            <td><span class="mono-cell"><%= device.serialNumber %></span></td>
+            <td class="model-cell"><strong><%= device.model %></strong></td>
+            <td><span class="device-type-pill">▭ <%= device.type %></span></td>
+
+            <td>
+              <span class="status <%= device.status %>"><%= statusLabel %></span>
+            </td>
+
+            <td>
+              <strong class="date-cell"><%= device.warranty || '—' %></strong>
+              <small class="block <%= warrantyClass %>"><%= device.days || '' %></small>
+            </td>
+
+            <td>
+              <strong><%= assignedMain %></strong>
+              <small class="block"><%= assignedSub %></small>
+            </td>
+
+            <td class="table-actions-cell">
+              <div class="row-actions-wrap">
+                <button class="icon-btn device-row-action" type="button" aria-label="Device actions">⋮</button>
+
+                <div class="row-action-menu" hidden>
+                  <a href="/devices/<%= device.assetNumber %>">View profile</a>
+                  <button type="button" data-action="edit-device">Edit device</button>
+                  <button type="button" data-action="assign-device">Assign laptop</button>
+                  <button type="button" data-action="archive-device">Archive</button>
+                </div>
+              </div>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="empty-state" id="devicesEmptyState" hidden>
+    <strong>No devices found</strong>
+    <p>Clear the search or reset the status filters.</p>
+  </div>
+</section>
+
+<div class="modal-backdrop" id="addDeviceModal" hidden>
+  <section class="modal-card device-modal-card" role="dialog" aria-modal="true" aria-labelledby="addDeviceTitle">
+    <div class="modal-head">
+      <div>
+        <h2 id="addDeviceTitle">Add Device</h2>
+        <p>Record a new laptop, lab computer or support device.</p>
+      </div>
+
+      <button class="modal-close" type="button" data-close-modal>×</button>
+    </div>
+
+    <form id="addDeviceForm" class="modal-form">
+      <div class="form-grid two">
+        <label>
+          Asset Number <b>*</b>
+          <input name="assetNumber" placeholder="MSHS-LAP-0009" required />
+        </label>
+
+        <label>
+          Serial Number <b>*</b>
+          <input name="serialNumber" placeholder="Enter serial number" required />
+        </label>
+      </div>
+
+      <div class="form-grid two">
+        <label>
+          Model <b>*</b>
+          <input name="model" placeholder="Dell Latitude 5440" required />
+        </label>
+
+        <label>
+          Device Type <b>*</b>
+          <select name="type" required>
+            <option value="Laptop">Laptop</option>
+            <option value="Loan Laptop">Loan Laptop</option>
+            <option value="Lab Computer">Lab Computer</option>
+            <option value="Projector">Projector</option>
+            <option value="Printer">Printer</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="form-grid two">
+        <label>
+          Status <b>*</b>
+          <select name="status" required>
+            <option value="available">Available</option>
+            <option value="loaned">Loaned</option>
+            <option value="damaged">Damaged</option>
+            <option value="out_of_warranty">Out of Warranty</option>
+            <option value="retired">Retired</option>
+          </select>
+        </label>
+
+        <label>
+          Warranty Expiry
+          <input name="warranty" placeholder="14 Jun 2026" />
+        </label>
+      </div>
+
+      <label>
+        Condition Notes
+        <textarea name="conditionNotes" placeholder="Good condition. Charger included."></textarea>
+      </label>
+
+      <div class="modal-actions">
+        <button class="btn btn-light" type="button" data-close-modal>Cancel</button>
+        <button class="btn btn-primary" type="submit">Add Device</button>
+      </div>
+    </form>
+  </section>
+</div>
+
+<%- include('../partials/layout-end') %>

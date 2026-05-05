@@ -1,0 +1,60 @@
+<%- include('../partials/layout-start') %>
+<section class="page-head">
+  <div>
+    <h1>Parent Applications</h1>
+    <p class="subtext">Account Owner approval area for short-term laptop loan requests.</p>
+  </div>
+  <a class="btn btn-light" href="/apply/short-term-laptop-loan" target="_blank">Open Public Form</a>
+</section>
+
+<% if (typeof query !== 'undefined' && query.approved) { %>
+  <div class="form-alert success">Application approved and student moved into the laptop assignment queue.</div>
+<% } %>
+
+<section class="two-col wide-left">
+  <article class="card">
+    <div class="card-head"><h3>Short-Term Loan Applications</h3><span class="bubble blue-bg"><%= parentApplications.length %></span></div>
+    <div class="application-list">
+      <% parentApplications.forEach((application) => { %>
+        <div class="application-card">
+          <div>
+            <div class="app-ref"><%= application.id %> <span class="tag <%= application.status === 'approved' ? 'success' : 'warning' %>"><%= application.status %></span></div>
+            <h3><%= application.studentName %> <small><%= application.yearLevel %></small></h3>
+            <p><strong>Parent:</strong> <%= application.parentName %> · <%= application.parentEmail %></p>
+            <p><strong>Request:</strong> <%= application.requestedLoanType %> · <%= application.requestedDates %></p>
+            <p><strong>Reason:</strong> <%= application.reason %></p>
+            <small>Submitted: <%= application.submitted %></small>
+          </div>
+          <div class="application-actions">
+            <% if (application.status !== 'approved') { %>
+              <form method="post" action="/parent-applications/<%= application.id %>/approve">
+                <button type="submit" class="btn btn-primary">Approve</button>
+              </form>
+            <% } else { %>
+              <button class="btn btn-light" disabled>Approved</button>
+            <% } %>
+          </div>
+        </div>
+      <% }) %>
+    </div>
+  </article>
+
+  <aside class="card">
+    <h3>Students Needing a Laptop</h3>
+    <p class="subtext">Approved applications appear here ready for stock assignment.</p>
+    <div class="queue-list">
+      <% studentsNeedingLaptop.forEach((student) => { %>
+        <div class="queue-row">
+          <div class="avatar small"><%= student.studentName.split(' ').map(n => n[0]).join('').slice(0,2) %></div>
+          <div>
+            <strong><%= student.studentName %></strong>
+            <p><%= student.yearLevel %> · <%= student.requestedLoanType %></p>
+            <small><%= student.status %> from <%= student.sourceApplication %></small>
+          </div>
+        </div>
+      <% }) %>
+    </div>
+    <a class="btn btn-primary full-width" href="/loans">Assign Laptop from Stock</a>
+  </aside>
+</section>
+<%- include('../partials/layout-end') %>

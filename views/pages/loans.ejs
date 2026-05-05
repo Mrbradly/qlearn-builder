@@ -1,0 +1,338 @@
+<%- include('../partials/layout-start') %>
+
+<%
+  const loanRows = Array.isArray(loans) ? loans : [];
+  const queueRows = Array.isArray(studentsNeedingLaptop) ? studentsNeedingLaptop : [];
+  const deviceRows = (typeof devices !== 'undefined' && Array.isArray(devices)) ? devices : [];
+
+  const availableLoanDevices = deviceRows.filter((device) => {
+    const status = String(device.status || '').toLowerCase();
+    return status === 'available' || status === 'loan stock' || status === 'ready';
+  });
+
+  const normaliseStatus = (status) => String(status || 'active').toLowerCase().replace(/\s+/g, '_');
+  const isReturnedLoan = (loan) => normaliseStatus(loan.status) === 'returned';
+  const isShortTermLoan = (loan) => String(loan.type || '').toLowerCase().includes('short');
+  const isLongTermLoan = (loan) => String(loan.type || '').toLowerCase().includes('long');
+  const isOverdueLoan = (loan) => normaliseStatus(loan.status) === 'overdue';
+  const activeCount = loanRows.filter((loan) => !isReturnedLoan(loan)).length;
+  const shortCount = loanRows.filter(isShortTermLoan).length;
+  const longCount = loanRows.filter(isLongTermLoan).length;
+  const overdueCount = loanRows.filter(isOverdueLoan).length;
+  const returnedCount = loanRows.filter(isReturnedLoan).length;
+  const dueSoonCount = loanRows.filter((loan) => normaliseStatus(loan.status) === 'due_soon').length;
+
+  const yearLevels = [...new Set(loanRows.map((loan) => loan.year).filter(Boolean))].sort((a, b) => Number(a) - Number(b));
+  const loanStatuses = [...new Set(loanRows.map((loan) => normaliseStatus(loan.status)).filter(Boolean))];
+%>
+
+<section class="page-head loans-page-head" data-loans-page>
+  <div>
+    <p class="eyebrow">Loan Manager</p>
+    <h1>Student Laptop Loans</h1>
+    <p>Track active loans, assign approved students a device, manage overdue returns and prepare family reminders.</p>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-light" type="button" id="openAssignLaptopModal">♙ Assign Laptop</button>
+    <button class="btn btn-light" type="button" id="openReminderModal">✉ Send Reminder</button>
+    <button class="btn btn-primary" type="button" id="exportLoansBtn">⇩ Export Loans CSV</button>
+  </div>
+</section>
+
+<section class="loans-metrics" data-loans-page>
+  <article class="loan-kpi-card">
+    <span class="metric-icon blue">▭</span>
+    <div><strong><%= activeCount %></strong><p>Active Loans</p></div>
+  </article>
+  <article class="loan-kpi-card">
+    <span class="metric-icon green">☑</span>
+    <div><strong><%= shortCount %></strong><p>Short-Term</p></div>
+  </article>
+  <article class="loan-kpi-card">
+    <span class="metric-icon purple">▣</span>
+    <div><strong><%= longCount %></strong><p>Long-Term</p></div>
+  </article>
+  <article class="loan-kpi-card warning">
+    <span class="metric-icon red">!</span>
+    <div><strong><%= overdueCount %></strong><p>Overdue Returns</p></div>
+  </article>
+</section>
+
+<% if (queueRows.length) { %>
+<section class="card assignment-queue-card polished-queue" data-loans-page>
+  <div class="card-head">
+    <div>
+      <h3>Approved Students Needing a Laptop</h3>
+      <p class="card-subtitle">These students have an approved parent short-term loan application and are ready for assignment.</p>
+    </div>
+    <span class="bubble blue-bg"><%= queueRows.length %></span>
+  </div>
+
+  <div class="assignment-queue loan-queue-grid">
+    <% queueRows.forEach((student, index) => { %>
+      <article
+        class="queue-row compact loan-queue-row"
+        data-queue-student
+        data-student-name="<%= student.studentName || '' %>"
+        data-student-id="<%= student.studentId || student.id || '' %>"
+        data-year-level="<%= student.yearLevel || '' %>"
+        data-loan-type="<%= student.requestedLoanType || 'Short-Term' %>"
+        data-family-email="<%= student.parentEmail || student.familyEmail || '' %>"
+      >
+        <div class="avatar small"><%= String(student.studentName || 'Student').split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase() %></div>
+        <div>
+          <strong><%= student.studentName %></strong>
+          <p>
+            <%= student.studentId || student.id || 'Student ID pending' %> ·
+            Year <%= student.yearLevel || 'N/A' %> ·
+            <%= student.requestedLoanType || 'Short-Term' %>
+          </p>
+        </div>
+        <button class="btn btn-primary" type="button" data-open-assign-from-queue>Assign Laptop</button>
+      </article>
+    <% }) %>
+  </div>
+</section>
+<% } %>
+
+<section class="loan-layout polished-loan-layout" data-loans-page>
+  <div class="card loan-main polished-loan-main">
+    <div class="loan-tabs" role="tablist" aria-label="Loan filters">
+      <button class="active" type="button" data-loan-tab="active">Active Loans <b><%= activeCount %></b></button>
+      <button type="button" data-loan-tab="short-term">Short-Term <b><%= shortCount %></b></button>
+      <button type="button" data-loan-tab="long-term">Long-Term <b><%= longCount %></b></button>
+      <button type="button" data-loan-tab="overdue">Overdue <b class="danger-pill"><%= overdueCount %></b></button>
+      <button type="button" data-loan-tab="returned">Returned <b><%= returnedCount %></b></button>
+    </div>
+
+    <div class="loan-toolbar">
+      <div class="search-box loan-search-box">⌕
+        <input id="loanSearchInput" type="search" placeholder="Search student name, student ID or device tag..." autocomplete="off" />
+      </div>
+
+      <select id="loanTypeFilter" class="polished-select" aria-label="Filter by loan type">
+        <option value="all">All Loan Types</option>
+        <option value="Short-Term">Short-Term</option>
+        <option value="Long-Term">Long-Term</option>
+      </select>
+
+      <select id="loanYearFilter" class="polished-select" aria-label="Filter by year level">
+        <option value="all">All Years</option>
+        <% yearLevels.forEach((year) => { %>
+          <option value="<%= year %>">Year <%= year %></option>
+        <% }) %>
+      </select>
+
+      <select id="loanStatusFilter" class="polished-select" aria-label="Filter by status">
+        <option value="all">All Statuses</option>
+        <% loanStatuses.forEach((status) => { %>
+          <option value="<%= status %>"><%= status.replace('_', ' ') %></option>
+        <% }) %>
+      </select>
+
+      <button class="btn btn-light" type="button" id="resetLoanFilters">Reset</button>
+    </div>
+
+    <div class="table-scroll-wrap">
+      <table class="data-table compact polished-loans-table" id="loansTable">
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>Year</th>
+            <th>Device</th>
+            <th>Loan Type</th>
+            <th>Issued</th>
+            <th>Expected Return</th>
+            <th>Status</th>
+            <th>Reminder</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% loanRows.forEach((loan, index) => {
+            const statusKey = normaliseStatus(loan.status);
+            const loanTypeKey = isShortTermLoan(loan) ? 'short-term' : isLongTermLoan(loan) ? 'long-term' : String(loan.type || '').toLowerCase();
+            const searchText = `${loan.name || ''} ${loan.id || ''} ${loan.device || ''} ${loan.tag || ''} ${loan.type || ''} ${loan.year || ''}`.toLowerCase();
+          %>
+            <tr
+              data-loan-row
+              data-search="<%= searchText %>"
+              data-tab="<%= statusKey === 'returned' ? 'returned' : statusKey === 'overdue' ? 'overdue' : loanTypeKey %>"
+              data-active="<%= statusKey !== 'returned' %>"
+              data-loan-type="<%= loan.type || '' %>"
+              data-year-level="<%= loan.year || '' %>"
+              data-status="<%= statusKey %>"
+              data-student-name="<%= loan.name || '' %>"
+              data-student-id="<%= loan.id || '' %>"
+              data-device="<%= loan.device || '' %>"
+              data-device-tag="<%= loan.tag || '' %>"
+              data-expected="<%= loan.expected || '' %>"
+            >
+              <td>
+                <div class="person">
+                  <span class="round-avatar small"><%= loan.initials || String(loan.name || 'ST').split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase() %></span>
+                  <div><strong><%= loan.name %></strong><small><%= loan.id %></small></div>
+                </div>
+              </td>
+              <td>Year <%= loan.year %></td>
+              <td><%= loan.device %><small class="block"><%= loan.tag %></small></td>
+              <td><span class="tag <%= isLongTermLoan(loan) ? 'purple-tag' : 'info' %>"><%= loan.type %></span></td>
+              <td><%= loan.issued %></td>
+              <td>
+                <%= loan.expected %>
+                <small class="block <%= statusKey === 'overdue' ? 'danger-text' : statusKey === 'due_soon' ? 'warning-text' : '' %>"><%= loan.dueText || '' %></small>
+              </td>
+              <td><span class="status <%= statusKey %>"><%= statusKey.replace('_',' ') %></span></td>
+              <td><span class="reminder-state" data-reminder-state>Not sent</span></td>
+              <td>
+                <div class="row-actions-wrap">
+                  <button class="icon-btn loan-row-action" type="button" aria-label="Loan actions">⋮</button>
+                  <div class="row-action-menu" hidden>
+                    <button type="button" data-open-row-reminder>Send reminder</button>
+                    <button type="button" data-mark-returned>Mark returned</button>
+                    <button type="button" data-view-loan>View details</button>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="empty-state" id="loansEmptyState" hidden>
+      <strong>No loans match these filters.</strong>
+      <p>Reset the search, change the tab, or clear the dropdown filters.</p>
+    </div>
+
+    <div class="table-footer polished-table-footer">
+      <span id="loanTableCount">Showing <%= loanRows.length %> loans</span>
+      <span class="table-note">CSV export uses the current filtered view.</span>
+    </div>
+  </div>
+
+  <aside class="side-stack polished-loan-side">
+    <div class="card loan-summary-card">
+      <div class="card-head">
+        <div>
+          <h3>Loan Summary</h3>
+          <p class="card-subtitle">Operational snapshot for the current loan register.</p>
+        </div>
+      </div>
+      <div class="summary-grid loan-summary improved-summary">
+        <div><span class="metric-icon blue">▭</span><b><%= shortCount %></b><small>Short-Term Loans<br><%= dueSoonCount %> due soon</small></div>
+        <div><span class="metric-icon purple">▣</span><b><%= longCount %></b><small>Long-Term Loans<br>Monitor term return dates</small></div>
+        <div><span class="metric-icon red">!</span><b><%= overdueCount %></b><small>Overdue Loans<br><em>Follow up with families</em></small></div>
+        <div><span class="metric-icon gold">▣</span><b><%= queueRows.length %></b><small>Approved Queue<br>Ready for assignment</small></div>
+      </div>
+    </div>
+
+    <div class="card reminder-card polished-reminder-preview">
+      <div class="card-head">
+        <div>
+          <h3>Reminder Preview</h3>
+          <p class="card-subtitle">Select a row or open the reminder modal to preview family contact.</p>
+        </div>
+      </div>
+      <label>To<input id="inlineReminderTo" value="Select a family or loan row" readonly /></label>
+      <label>Subject<input id="inlineReminderSubject" value="Upcoming device return reminder" readonly /></label>
+      <label>Message Preview<textarea id="inlineReminderMessage" readonly>Choose a loan to preview the reminder email.</textarea></label>
+      <button class="btn btn-primary wide" type="button" id="openReminderFromPreview">Open Reminder Modal</button>
+    </div>
+  </aside>
+</section>
+
+<div class="modal-backdrop" id="assignLaptopModal" hidden data-loans-page>
+  <section class="modal-card wide-modal" role="dialog" aria-modal="true" aria-labelledby="assignLaptopTitle">
+    <div class="modal-head">
+      <div>
+        <p class="eyebrow">Device Assignment</p>
+        <h2 id="assignLaptopTitle">Assign Laptop</h2>
+      </div>
+      <button class="modal-close" type="button" data-close-loan-modal>×</button>
+    </div>
+
+    <form id="assignLaptopForm" class="modal-form">
+      <div class="form-grid two">
+        <label>Student Name
+          <input name="studentName" id="assignStudentName" required placeholder="Student name" />
+        </label>
+        <label>Student ID
+          <input name="studentId" id="assignStudentId" placeholder="MIS / EQ ID" />
+        </label>
+      </div>
+
+      <div class="form-grid three">
+        <label>Year Level
+          <select name="yearLevel" id="assignYearLevel">
+            <option value="">Select year</option>
+            <% [7,8,9,10,11,12].forEach((year) => { %>
+              <option value="<%= year %>">Year <%= year %></option>
+            <% }) %>
+          </select>
+        </label>
+        <label>Loan Type
+          <select name="loanType" id="assignLoanType">
+            <option>Short-Term</option>
+            <option>Long-Term</option>
+          </select>
+        </label>
+        <label>Expected Return
+          <input name="expectedReturn" id="assignExpectedReturn" type="date" />
+        </label>
+      </div>
+
+      <label>Available Device from Stock
+        <select name="deviceTag" id="assignDeviceSelect" required>
+          <option value="">Select available device</option>
+          <% availableLoanDevices.forEach((device) => { %>
+            <option value="<%= device.assetNumber || device.tag || device.serialNumber %>" data-device-model="<%= device.model || device.deviceType || 'Laptop' %>">
+              <%= device.assetNumber || device.tag || device.serialNumber %> · <%= device.model || device.deviceType || 'Laptop' %>
+            </option>
+          <% }) %>
+        </select>
+      </label>
+
+      <div class="assignment-confirm-box" id="assignmentConfirmBox">
+        Select a student and device to preview the assignment confirmation.
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn btn-light" type="button" data-close-loan-modal>Cancel</button>
+        <button class="btn btn-primary" type="submit">Confirm Assignment</button>
+      </div>
+    </form>
+  </section>
+</div>
+
+<div class="modal-backdrop" id="sendReminderModal" hidden data-loans-page>
+  <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="sendReminderTitle">
+    <div class="modal-head">
+      <div>
+        <p class="eyebrow">Family Contact</p>
+        <h2 id="sendReminderTitle">Send Reminder</h2>
+      </div>
+      <button class="modal-close" type="button" data-close-loan-modal>×</button>
+    </div>
+
+    <form id="sendReminderForm" class="modal-form">
+      <label>To
+        <input name="to" id="reminderTo" value="Selected family" />
+      </label>
+      <label>Subject
+        <input name="subject" id="reminderSubject" value="Upcoming device return reminder" />
+      </label>
+      <label>Message Preview
+        <textarea name="message" id="reminderMessage" rows="9">Choose a loan to generate the reminder preview.</textarea>
+      </label>
+
+      <div class="modal-actions">
+        <button class="btn btn-light" type="button" data-close-loan-modal>Cancel</button>
+        <button class="btn btn-primary" type="submit">Mark Reminder as Sent</button>
+      </div>
+    </form>
+  </section>
+</div>
+
+<%- include('../partials/layout-end') %>

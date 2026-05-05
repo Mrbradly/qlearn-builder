@@ -1,0 +1,259 @@
+<%- include('../partials/layout-start') %>
+
+<%
+  const stats = typeof dashboardStats !== 'undefined' ? dashboardStats : {
+    availableLoanLaptops: 48,
+    activeShortTermLoans: 76,
+    activeLongTermLoans: 132,
+    overdueReturns: 18,
+    warrantyExpiringSoon: 23,
+    openItIssues: 27,
+    returnedLoans: 156
+  };
+
+  const alerts = typeof priorityAlerts !== 'undefined' ? priorityAlerts : [
+    {
+      icon: '♢',
+      iconClass: 'gold',
+      title: 'Warranty expiring in 21 days',
+      description: '23 devices have warranties expiring on 14 Jun 2025',
+      tag: 'Warranty',
+      tagClass: 'warning',
+      time: '2h ago',
+      href: '/warranty-alerts'
+    },
+    {
+      icon: '!',
+      iconClass: 'red',
+      title: 'Overdue loan',
+      description: '18 loans are overdue for return',
+      tag: 'Overdue',
+      tagClass: 'danger',
+      time: '3h ago',
+      href: '/loans'
+    },
+    {
+      icon: '♙',
+      iconClass: 'blue',
+      title: 'New parent application',
+      description: '5 new parent applications require review',
+      tag: 'Applications',
+      tagClass: 'info',
+      time: '5h ago',
+      href: '/parent-applications'
+    },
+    {
+      icon: '△',
+      iconClass: 'orange',
+      title: 'Lab damage report submitted',
+      description: 'New report submitted for Science Lab 2',
+      tag: 'Lab Damage',
+      tagClass: 'orange-tag',
+      time: '1d ago',
+      href: '/damage-reports'
+    }
+  ];
+
+  const recent = typeof recentActivity !== 'undefined' ? recentActivity : [
+    {
+      icon: '✓',
+      iconClass: 'green',
+      title: 'Loan returned',
+      description: 'Liam Carter returned MacBook Air (LAP-1047)',
+      time: 'Today, 10:15 AM',
+      href: '/loans'
+    },
+    {
+      icon: '▭',
+      iconClass: 'blue',
+      title: 'New short-term loan',
+      description: 'Ava Nguyen borrowed Dell Latitude 5440',
+      time: 'Today, 9:42 AM',
+      href: '/loans'
+    },
+    {
+      icon: '♢',
+      iconClass: 'gold',
+      title: 'Warranty alert created',
+      description: 'Dell Latitude 5440 (LAP-1021) warranty expiring in 21 days',
+      time: 'Today, 8:30 AM',
+      href: '/warranty-alerts'
+    },
+    {
+      icon: '☊',
+      iconClass: 'red',
+      title: 'New IT issue',
+      description: 'Issue #ISS-2048 created: Projector not displaying',
+      time: 'Yesterday, 3:21 PM',
+      href: '/issues'
+    },
+    {
+      icon: '♙',
+      iconClass: 'blue',
+      title: 'Parent application submitted',
+      description: 'Application from Sarah Johnson for Year 9',
+      time: 'Yesterday, 11:08 AM',
+      href: '/parent-applications'
+    }
+  ];
+
+  const totalActiveLoans = stats.activeShortTermLoans + stats.activeLongTermLoans;
+%>
+
+<section class="page-head dashboard-head">
+  <div>
+    <h1>Dashboard</h1>
+    <p>Overview of device loans, warranty alerts, IT issues and lab damage reports.</p>
+  </div>
+
+  <button class="btn btn-light" id="exportDashboardBtn" type="button">
+    ⇩ Export Dashboard ˅
+  </button>
+</section>
+
+<section class="dashboard-metrics">
+  <a class="dashboard-metric-card" href="/devices">
+    <span class="metric-icon blue">▭</span>
+    <div>
+      <strong><%= stats.availableLoanLaptops %></strong>
+      <p>Available Loan Laptops</p>
+      <small>View all devices ›</small>
+    </div>
+  </a>
+
+  <a class="dashboard-metric-card" href="/loans">
+    <span class="metric-icon green">☑</span>
+    <div>
+      <strong><%= stats.activeShortTermLoans %></strong>
+      <p>Active Short-Term Loans</p>
+      <small>View all loans ›</small>
+    </div>
+  </a>
+
+  <a class="dashboard-metric-card" href="/loans">
+    <span class="metric-icon purple">▣</span>
+    <div>
+      <strong><%= stats.activeLongTermLoans %></strong>
+      <p>Active Long-Term Loans</p>
+      <small>View all loans ›</small>
+    </div>
+  </a>
+
+  <a class="dashboard-metric-card danger-card" href="/loans">
+    <span class="metric-icon red">!</span>
+    <div>
+      <strong><%= stats.overdueReturns %></strong>
+      <p>Overdue Returns</p>
+      <small>View overdue loans ›</small>
+    </div>
+  </a>
+
+  <a class="dashboard-metric-card" href="/warranty-alerts">
+    <span class="metric-icon gold">♢</span>
+    <div>
+      <strong><%= stats.warrantyExpiringSoon %></strong>
+      <p>Warranty Expiring Soon</p>
+      <small>View warranty alerts ›</small>
+    </div>
+  </a>
+
+  <a class="dashboard-metric-card" href="/issues">
+    <span class="metric-icon blue">☊</span>
+    <div>
+      <strong><%= stats.openItIssues %></strong>
+      <p>Open IT Issues</p>
+      <small>View all issues ›</small>
+    </div>
+  </a>
+</section>
+
+<section class="dashboard-main-grid">
+  <article class="card dashboard-card priority-card">
+    <div class="card-head">
+      <h3>Priority Alerts <span class="bubble red-bg"><%= alerts.length %></span></h3>
+      <a href="/reports">View all alerts</a>
+    </div>
+
+    <div class="dashboard-alert-list">
+      <% alerts.forEach((alert) => { %>
+        <a class="dashboard-alert-row" href="<%= alert.href %>">
+          <span class="metric-icon <%= alert.iconClass %> sm"><%= alert.icon %></span>
+          <div class="dashboard-row-copy">
+            <strong><%= alert.title %></strong>
+            <p><%= alert.description %></p>
+          </div>
+          <span class="tag <%= alert.tagClass %>"><%= alert.tag %></span>
+          <small><%= alert.time %></small>
+          <b>›</b>
+        </a>
+      <% }) %>
+    </div>
+  </article>
+
+  <article class="card dashboard-card activity-card">
+    <div class="card-head">
+      <h3>Recent Activity</h3>
+      <a href="/reports">View all activity</a>
+    </div>
+
+    <div class="dashboard-activity-list">
+      <% recent.forEach((item) => { %>
+        <a class="dashboard-activity-row" href="<%= item.href %>">
+          <span class="metric-icon <%= item.iconClass %> sm"><%= item.icon %></span>
+          <div class="dashboard-row-copy">
+            <strong><%= item.title %></strong>
+            <p><%= item.description %></p>
+          </div>
+          <small><%= item.time %></small>
+        </a>
+      <% }) %>
+    </div>
+  </article>
+</section>
+
+<section class="dashboard-bottom-grid">
+  <article class="card dashboard-card chart-card">
+    <div class="card-head">
+      <h3>Loans Overview</h3>
+      <button class="btn tiny" type="button">This Month ˅</button>
+    </div>
+
+    <div class="dashboard-chart-wrap">
+      <div class="fake-chart" aria-label="Loan overview chart">
+        <span></span>
+        <span></span>
+      </div>
+
+      <div class="chart-legend dashboard-chart-legend">
+        <p><b class="dot green-dot"></b> Active Loans</p>
+        <h2><%= totalActiveLoans %> <em>↑ 12%</em></h2>
+
+        <p><b class="dot blue-dot"></b> Returned Loans</p>
+        <h2><%= stats.returnedLoans %> <em>↑ 8%</em></h2>
+      </div>
+    </div>
+  </article>
+
+  <article class="card dashboard-card issue-donut-card">
+    <div class="card-head">
+      <h3>Issues Overview</h3>
+      <a href="/issues">View all IT issues ›</a>
+    </div>
+
+    <div class="dashboard-donut-wrap">
+      <div class="donut">
+        <strong><%= stats.openItIssues %></strong>
+        <small>Open Issues</small>
+      </div>
+
+      <div class="legend-list dashboard-legend-list">
+        <p><b class="dot red-dot"></b><span>High Priority</span><strong>8 (30%)</strong></p>
+        <p><b class="dot orange-dot"></b><span>Medium Priority</span><strong>11 (41%)</strong></p>
+        <p><b class="dot blue-dot"></b><span>Low Priority</span><strong>6 (22%)</strong></p>
+        <p><b class="dot gray-dot"></b><span>On Hold</span><strong>2 (7%)</strong></p>
+      </div>
+    </div>
+  </article>
+</section>
+
+<%- include('../partials/layout-end') %>
